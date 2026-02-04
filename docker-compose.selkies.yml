@@ -1,0 +1,71 @@
+# Docker Compose for Debian Desktop with Selkies WebRTC
+# Usage: docker compose -f docker-compose.selkies.yml up -d
+
+version: '3.8'
+
+services:
+  desktop:
+    build:
+      context: ./docker/selkies
+      args:
+        - USERNAME=${USERNAME:-user}
+        - USER_UID=${USER_UID:-1000}
+        - USER_GID=${USER_GID:-1000}
+    image: debian-desktop:selkies-${IMAGE_TAG:-latest}
+    container_name: ${COMPOSE_PROJECT_NAME:-debian-desktop}-selkies
+    hostname: debian-desktop
+    restart: unless-stopped
+    security_opt:
+      - seccomp:unconfined
+    shm_size: 2gb
+    ports:
+      - "${SELKIES_WEB_PORT:-8080}:8080"
+    environment:
+      # User configuration
+      - USERNAME=${USERNAME:-user}
+      - USER_UID=${USER_UID:-1000}
+      - USER_GID=${USER_GID:-1000}
+      # Display configuration
+      - DISPLAY=${DISPLAY:-:0}
+      - RESOLUTION=${RESOLUTION:-1920x1080x24}
+      - TZ=${TZ:-UTC}
+      # Selkies configuration
+      - SELKIES_WEB_PORT=${SELKIES_WEB_PORT:-8080}
+      - SELKIES_ENCODER=${SELKIES_ENCODER:-x264enc}
+      - SELKIES_ENABLE_RESIZE=${SELKIES_ENABLE_RESIZE:-true}
+      - SELKIES_ENABLE_BASIC_AUTH=${SELKIES_ENABLE_BASIC_AUTH:-false}
+      - SELKIES_BASIC_AUTH_USER=${SELKIES_BASIC_AUTH_USER:-}
+      - SELKIES_BASIC_AUTH_PASSWORD=${SELKIES_BASIC_AUTH_PASSWORD:-}
+      - SELKIES_TURN_HOST=${SELKIES_TURN_HOST:-}
+      - SELKIES_TURN_PORT=${SELKIES_TURN_PORT:-}
+      - SELKIES_TURN_USERNAME=${SELKIES_TURN_USERNAME:-}
+      - SELKIES_TURN_PASSWORD=${SELKIES_TURN_PASSWORD:-}
+      - SELKIES_TURN_PROTOCOL=${SELKIES_TURN_PROTOCOL:-udp}
+      - FRAMERATE=${FRAMERATE:-30}
+      # Plugin configuration
+      - ENABLE_CHROME=${ENABLE_CHROME:-false}
+      - ENABLE_NOMACHINE=${ENABLE_NOMACHINE:-false}
+      - ENABLE_CURSOR=${ENABLE_CURSOR:-false}
+      - ENABLE_VSCODE=${ENABLE_VSCODE:-false}
+      - ENABLE_CLAUDE_CODE=${ENABLE_CLAUDE_CODE:-false}
+      - ENABLE_OPENCODE=${ENABLE_OPENCODE:-false}
+      # Homebrew
+      - HOMEBREW_NO_AUTO_UPDATE=${HOMEBREW_NO_AUTO_UPDATE:-1}
+      - HOMEBREW_NO_ANALYTICS=${HOMEBREW_NO_ANALYTICS:-1}
+    volumes:
+      - desktop-home:/home/${USERNAME:-user}
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+
+volumes:
+  desktop-home:
+    name: ${COMPOSE_PROJECT_NAME:-debian-desktop}-selkies-home
+
+networks:
+  default:
+    name: ${COMPOSE_PROJECT_NAME:-debian-desktop}-network

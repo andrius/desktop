@@ -1,0 +1,103 @@
+# Docker Compose for Debian Desktop
+# Choose the variant you want to use by uncommenting the appropriate service
+
+version: '3.8'
+
+x-common-config: &common-config
+  restart: unless-stopped
+  security_opt:
+    - seccomp:unconfined
+  shm_size: 2gb
+  environment:
+    - USERNAME=${USERNAME:-user}
+    - USER_UID=${USER_UID:-1000}
+    - USER_GID=${USER_GID:-1000}
+    - DISPLAY=${DISPLAY:-:1}
+    - RESOLUTION=${RESOLUTION:-1920x1080x24}
+    - TZ=${TZ:-UTC}
+    - ENABLE_CHROME=${ENABLE_CHROME:-false}
+    - ENABLE_NOMACHINE=${ENABLE_NOMACHINE:-false}
+    - ENABLE_CURSOR=${ENABLE_CURSOR:-false}
+    - ENABLE_VSCODE=${ENABLE_VSCODE:-false}
+    - ENABLE_CLAUDE_CODE=${ENABLE_CLAUDE_CODE:-false}
+    - ENABLE_OPENCODE=${ENABLE_OPENCODE:-false}
+    - HOMEBREW_NO_AUTO_UPDATE=${HOMEBREW_NO_AUTO_UPDATE:-1}
+    - HOMEBREW_NO_ANALYTICS=${HOMEBREW_NO_ANALYTICS:-1}
+  volumes:
+    - desktop-home:/home/${USERNAME:-user}
+    - /tmp/.X11-unix:/tmp/.X11-unix:rw
+
+services:
+  # ============================================================================
+  # KasmVNC Variant (Recommended for most users)
+  # Web-based VNC with file transfer support
+  # ============================================================================
+  kasmvnc:
+    <<: *common-config
+    build:
+      context: ./docker/kasmvnc
+      args:
+        - USERNAME=${USERNAME:-user}
+        - USER_UID=${USER_UID:-1000}
+        - USER_GID=${USER_GID:-1000}
+    image: debian-desktop:kasmvnc-${IMAGE_TAG:-latest}
+    container_name: ${COMPOSE_PROJECT_NAME:-debian-desktop}-kasmvnc
+    hostname: debian-desktop
+    ports:
+      - "${VNC_PORT:-5901}:5901"
+      - "${VNC_WEB_PORT:-6901}:6901"
+    environment:
+      - VNC_PW=${VNC_PW:-vncpassword}
+      - VNC_VIEW_ONLY_PW=${VNC_VIEW_ONLY_PW:-}
+      - VNC_PORT=${VNC_PORT:-5901}
+      - VNC_WEB_PORT=${VNC_WEB_PORT:-6901}
+      - VNC_RESOLUTION=${VNC_RESOLUTION:-1920x1080}
+      - VNC_COL_DEPTH=${VNC_COL_DEPTH:-24}
+      - KASM_SVC_AUDIO=${KASM_SVC_AUDIO:-1}
+      - KASM_SVC_AUDIO_INPUT=${KASM_SVC_AUDIO_INPUT:-1}
+      - KASM_SVC_UPLOADS=${KASM_SVC_UPLOADS:-1}
+      - KASM_SVC_DOWNLOADS=${KASM_SVC_DOWNLOADS:-1}
+    profiles:
+      - kasmvnc
+      - default
+
+  # ============================================================================
+  # Selkies Variant (WebRTC-based)
+  # Lower latency with WebRTC, requires TURN server for NAT traversal
+  # ============================================================================
+  selkies:
+    <<: *common-config
+    build:
+      context: ./docker/selkies
+      args:
+        - USERNAME=${USERNAME:-user}
+        - USER_UID=${USER_UID:-1000}
+        - USER_GID=${USER_GID:-1000}
+    image: debian-desktop:selkies-${IMAGE_TAG:-latest}
+    container_name: ${COMPOSE_PROJECT_NAME:-debian-desktop}-selkies
+    hostname: debian-desktop
+    ports:
+      - "${SELKIES_WEB_PORT:-8080}:8080"
+    environment:
+      - SELKIES_WEB_PORT=${SELKIES_WEB_PORT:-8080}
+      - SELKIES_ENCODER=${SELKIES_ENCODER:-x264enc}
+      - SELKIES_ENABLE_RESIZE=${SELKIES_ENABLE_RESIZE:-true}
+      - SELKIES_ENABLE_BASIC_AUTH=${SELKIES_ENABLE_BASIC_AUTH:-false}
+      - SELKIES_BASIC_AUTH_USER=${SELKIES_BASIC_AUTH_USER:-}
+      - SELKIES_BASIC_AUTH_PASSWORD=${SELKIES_BASIC_AUTH_PASSWORD:-}
+      - SELKIES_TURN_HOST=${SELKIES_TURN_HOST:-}
+      - SELKIES_TURN_PORT=${SELKIES_TURN_PORT:-}
+      - SELKIES_TURN_USERNAME=${SELKIES_TURN_USERNAME:-}
+      - SELKIES_TURN_PASSWORD=${SELKIES_TURN_PASSWORD:-}
+      - SELKIES_TURN_PROTOCOL=${SELKIES_TURN_PROTOCOL:-udp}
+      - FRAMERATE=${FRAMERATE:-30}
+    profiles:
+      - selkies
+
+volumes:
+  desktop-home:
+    name: ${COMPOSE_PROJECT_NAME:-debian-desktop}-home
+
+networks:
+  default:
+    name: ${COMPOSE_PROJECT_NAME:-debian-desktop}-network
