@@ -47,7 +47,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     gnupg \
     lsb-release \
-    software-properties-common \
     apt-transport-https \
     git \
     vim \
@@ -72,6 +71,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-pip \
     python3-venv \
     python3-dev \
+    # PyGObject for GStreamer Python bindings
+    python3-gi \
+    python3-gi-cairo \
+    gir1.2-gstreamer-1.0 \
+    gir1.2-gst-plugins-base-1.0 \
+    gir1.2-gst-plugins-bad-1.0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Configure locales
@@ -92,8 +97,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Mesa/OpenGL
     mesa-utils \
     libgl1-mesa-dri \
-    libgl1-mesa-glx \
-    libegl1-mesa \
+    libgl1 \
+    libegl1 \
     libglu1-mesa \
     # XFCE4 desktop
     xfce4 \
@@ -138,8 +143,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gstreamer1.0-gl \
     libgstreamer1.0-dev \
     libgstreamer-plugins-base1.0-dev \
-    libgstreamer-plugins-good1.0-dev \
-    libgstreamer-plugins-bad1.0-dev \
     libsrtp2-1 \
     libnice10 \
     gstreamer1.0-nice \
@@ -185,12 +188,19 @@ RUN echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"' >> /home/${USE
 # Switch back to root for system configuration
 USER root
 
-# Install Selkies GStreamer WebRTC
-RUN pip3 install --break-system-packages \
-    selkies-gstreamer \
-    websockets \
-    aiohttp \
-    prometheus-client
+# Install Selkies GStreamer WebRTC from GitHub releases
+RUN SELKIES_VERSION="$(curl -fsSL "https://api.github.com/repos/selkies-project/selkies/releases/latest" | jq -r '.tag_name' | sed 's/[^0-9\.\-]*//g')" && \
+    cd /tmp && \
+    curl -O -fsSL "https://github.com/selkies-project/selkies/releases/download/v${SELKIES_VERSION}/selkies_gstreamer-${SELKIES_VERSION}-py3-none-any.whl" && \
+    pip3 install --break-system-packages --no-cache-dir --force-reinstall \
+        "selkies_gstreamer-${SELKIES_VERSION}-py3-none-any.whl" \
+        websockets \
+        aiohttp \
+        prometheus-client && \
+    rm -f "selkies_gstreamer-${SELKIES_VERSION}-py3-none-any.whl" && \
+    # Download web interface
+    mkdir -p /opt/selkies/web && \
+    curl -fsSL "https://github.com/selkies-project/selkies/releases/download/v${SELKIES_VERSION}/selkies-gstreamer-web_v${SELKIES_VERSION}.tar.gz" | tar -xzf - -C /opt/selkies/web
 
 # Copy scripts (base scripts should be copied to scripts/ directory before build)
 # The GitHub workflow or build script handles copying base scripts

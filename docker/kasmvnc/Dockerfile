@@ -50,7 +50,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     gnupg \
     lsb-release \
-    software-properties-common \
     apt-transport-https \
     git \
     vim \
@@ -92,8 +91,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Mesa/OpenGL
     mesa-utils \
     libgl1-mesa-dri \
-    libgl1-mesa-glx \
-    libegl1-mesa \
+    libgl1 \
+    libegl1 \
     libglu1-mesa \
     # XFCE4 desktop
     xfce4 \

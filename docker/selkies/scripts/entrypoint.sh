@@ -32,6 +32,9 @@ RESOLUTION=${RESOLUTION:-1920x1080x24}
 RESOLUTION_X=$(echo $RESOLUTION | cut -d'x' -f1)
 RESOLUTION_Y=$(echo $RESOLUTION | cut -d'x' -f2)
 
+# Clean up any stale X server locks
+rm -f /tmp/.X*-lock /tmp/.X11-unix/X* 2>/dev/null || true
+
 # Start X virtual framebuffer
 echo "Starting Xvfb on display ${DISPLAY}..."
 Xvfb ${DISPLAY} -screen 0 ${RESOLUTION} +extension GLX +extension RANDR +extension MIT-SHM &

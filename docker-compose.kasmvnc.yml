@@ -1,8 +1,6 @@
 # Docker Compose for Debian Desktop with KasmVNC
 # Usage: docker compose -f docker-compose.kasmvnc.yml up -d
 
-version: '3.8'
-
 services:
   desktop:
     build:
@@ -12,7 +10,6 @@ services:
         - USER_UID=${USER_UID:-1000}
         - USER_GID=${USER_GID:-1000}
     image: debian-desktop:kasmvnc-${IMAGE_TAG:-latest}
-    container_name: ${COMPOSE_PROJECT_NAME:-debian-desktop}-kasmvnc
     hostname: debian-desktop
     restart: unless-stopped
     security_opt:
