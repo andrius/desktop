@@ -16,119 +16,88 @@ on:
       push_images:
         description: 'Push images to registry'
         required: false
-        default: 'true'
+        default: true
         type: boolean
+      skip_tests:
+        description: 'Skip integration tests'
+        required: false
+        default: false
+        type: boolean
+      architectures:
+        description: 'Target architectures (comma-separated: amd64,arm64)'
+        required: false
+        default: 'amd64'
+        type: string
 
 env:
   REGISTRY: ghcr.io
   IMAGE_BASE: ${{ github.repository }}
 
 jobs:
-  build-kasmvnc:
+  prepare:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
+    outputs:
+      platforms_matrix: ${{ steps.prepare.outputs.platforms_matrix }}
+      is_multi_platform: ${{ steps.prepare.outputs.is_multi_platform }}
+      architectures: ${{ steps.prepare.outputs.architectures }}
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata for Docker
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}/kasmvnc
-          tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Copy base scripts
+      - name: Prepare platforms matrix
+        id: prepare
         run: |
-          cp docker/base/scripts/env-setup.sh docker/kasmvnc/scripts/
-          cp docker/base/scripts/init-user.sh docker/kasmvnc/scripts/
-          cp docker/base/scripts/plugin-manager.sh docker/kasmvnc/scripts/
+          ARCHITECTURES="${{ inputs.architectures || 'amd64' }}"
 
-      - name: Build and push KasmVNC image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./docker/kasmvnc
-          platforms: linux/amd64
-          push: ${{ inputs.push_images != 'false' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=kasmvnc
-          cache-to: type=gha,mode=max,scope=kasmvnc
+          python3 << 'EOF'
+          import json
+          import os
+
+          architectures = os.environ.get('ARCHITECTURES', 'amd64').split(',')
+          matrix_include = []
+
+          for arch in architectures:
+              arch = arch.strip()
+              platform = f'linux/{arch}'
+              if arch == 'amd64':
+                  runner = 'ubuntu-latest'
+              elif arch == 'arm64':
+                  runner = 'ubuntu-24.04-arm'
+              else:
+                  continue
+              matrix_include.append({'platform': platform, 'arch': arch, 'runner': runner})
+
+          is_multi = 'true' if len(matrix_include) > 1 else 'false'
+          arch_list = ','.join([m['arch'] for m in matrix_include])
+
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f'platforms_matrix={json.dumps({"include": matrix_include})}\n')
+              f.write(f'is_multi_platform={is_multi}\n')
+              f.write(f'architectures={arch_list}\n')
+          EOF
+        env:
+          ARCHITECTURES: ${{ inputs.architectures || 'amd64' }}
+
+  build-kasmvnc:
+    needs: prepare
+    uses: ./.github/workflows/build-kasmvnc.yml
+    with:
+      push_image: ${{ inputs.push_images != false }}
+      skip_tests: ${{ inputs.skip_tests == true }}
+      architectures: ${{ needs.prepare.outputs.architectures }}
+    secrets: inherit
 
   build-selkies:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata for Docker
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}/selkies
-          tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Copy base scripts
-        run: |
-          cp docker/base/scripts/env-setup.sh docker/selkies/scripts/
-          cp docker/base/scripts/init-user.sh docker/selkies/scripts/
-          cp docker/base/scripts/plugin-manager.sh docker/selkies/scripts/
-
-      - name: Build and push Selkies image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./docker/selkies
-          platforms: linux/amd64
-          push: ${{ inputs.push_images != 'false' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=selkies
-          cache-to: type=gha,mode=max,scope=selkies
+    needs: prepare
+    uses: ./.github/workflows/build-selkies.yml
+    with:
+      push_image: ${{ inputs.push_images != false }}
+      skip_tests: ${{ inputs.skip_tests == true }}
+      architectures: ${{ needs.prepare.outputs.architectures }}
+    secrets: inherit
 
   security-scan:
-    needs: [build-kasmvnc, build-selkies]
+    needs: [prepare, build-kasmvnc, build-selkies]
     runs-on: ubuntu-latest
+    if: always() && (needs.build-kasmvnc.result == 'success' || needs.build-kasmvnc.result == 'skipped') && (needs.build-selkies.result == 'success' || needs.build-selkies.result == 'skipped')
     permissions:
       contents: read
       security-events: write
@@ -138,10 +107,30 @@ jobs:
         variant: [kasmvnc, selkies]
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Copy base scripts
+        run: |
+          cp docker/base/scripts/env-setup.sh docker/${{ matrix.variant }}/scripts/
+          cp docker/base/scripts/init-user.sh docker/${{ matrix.variant }}/scripts/
+          cp docker/base/scripts/plugin-manager.sh docker/${{ matrix.variant }}/scripts/
+
+      - name: Build image for scanning
+        uses: docker/build-push-action@v5
+        with:
+          context: ./docker/${{ matrix.variant }}
+          load: true
+          tags: debian-desktop:${{ matrix.variant }}-latest
+          cache-from: type=gha,scope=${{ matrix.variant }}-amd64
+
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: '${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}/${{ matrix.variant }}:latest'
+          image-ref: 'debian-desktop:${{ matrix.variant }}-latest'
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
@@ -151,3 +140,21 @@ jobs:
         if: always()
         with:
           sarif_file: 'trivy-results.sarif'
+
+  summary:
+    needs: [prepare, build-kasmvnc, build-selkies, security-scan]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Generate Summary
+        run: |
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Architectures:** ${{ needs.prepare.outputs.architectures }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Multi-platform:** ${{ needs.prepare.outputs.is_multi_platform }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Image | Build | Security |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|----------|" >> $GITHUB_STEP_SUMMARY
+          echo "| KasmVNC | ${{ needs.build-kasmvnc.result == 'success' && 'Pass' || (needs.build-kasmvnc.result == 'skipped' && 'Skipped' || 'Failed') }} | ${{ needs.security-scan.result == 'success' && 'Pass' || (needs.security-scan.result == 'skipped' && 'Skipped' || 'Failed') }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Selkies | ${{ needs.build-selkies.result == 'success' && 'Pass' || (needs.build-selkies.result == 'skipped' && 'Skipped' || 'Failed') }} | ${{ needs.security-scan.result == 'success' && 'Pass' || (needs.security-scan.result == 'skipped' && 'Skipped' || 'Failed') }} |" >> $GITHUB_STEP_SUMMARY
