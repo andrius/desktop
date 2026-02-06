@@ -34,7 +34,7 @@ on:
       architectures:
         description: 'Target architectures (comma-separated: amd64,arm64)'
         required: false
-        default: 'amd64'
+        default: 'amd64,arm64'
         type: string
   workflow_call:
     inputs:
@@ -51,7 +51,7 @@ on:
       architectures:
         description: 'Target architectures (comma-separated: amd64,arm64)'
         required: false
-        default: 'amd64'
+        default: 'amd64,arm64'
         type: string
 
 env:
@@ -70,7 +70,7 @@ jobs:
       - name: Prepare platforms matrix
         id: prepare
         run: |
-          ARCHITECTURES="${{ inputs.architectures || 'amd64' }}"
+          ARCHITECTURES="${{ inputs.architectures || 'amd64,arm64' }}"
 
           python3 << 'EOF'
           import json
@@ -97,7 +97,7 @@ jobs:
               f.write(f'is_multi_platform={is_multi}\n')
           EOF
         env:
-          ARCHITECTURES: ${{ inputs.architectures || 'amd64' }}
+          ARCHITECTURES: ${{ inputs.architectures || 'amd64,arm64' }}
 
       - name: Determine push strategy
         id: push_strategy
