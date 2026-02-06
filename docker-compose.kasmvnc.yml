@@ -1,0 +1,68 @@
+# Docker Compose for Debian Desktop with KasmVNC
+# Usage: docker compose -f docker-compose.kasmvnc.yml up -d
+
+services:
+  desktop:
+    build:
+      context: ./docker/kasmvnc
+      args:
+        - USERNAME=${USERNAME:-user}
+        - USER_UID=${USER_UID:-1000}
+        - USER_GID=${USER_GID:-1000}
+    image: debian-desktop:kasmvnc-${IMAGE_TAG:-latest}
+    hostname: debian-desktop
+    restart: unless-stopped
+    security_opt:
+      - seccomp:unconfined
+    shm_size: 2gb
+    ports:
+      - "${VNC_PORT:-5901}:5901"
+      - "${VNC_WEB_PORT:-6901}:6901"
+    environment:
+      # User configuration
+      - USERNAME=${USERNAME:-user}
+      - USER_UID=${USER_UID:-1000}
+      - USER_GID=${USER_GID:-1000}
+      # Display configuration
+      - DISPLAY=${DISPLAY:-:1}
+      - RESOLUTION=${RESOLUTION:-1920x1080x24}
+      - TZ=${TZ:-UTC}
+      # VNC configuration
+      - VNC_PW=${VNC_PW:-vncpassword}
+      - VNC_VIEW_ONLY_PW=${VNC_VIEW_ONLY_PW:-}
+      - VNC_PORT=${VNC_PORT:-5901}
+      - VNC_WEB_PORT=${VNC_WEB_PORT:-6901}
+      - VNC_RESOLUTION=${VNC_RESOLUTION:-1920x1080}
+      - VNC_COL_DEPTH=${VNC_COL_DEPTH:-24}
+      # KasmVNC features
+      - KASM_SVC_AUDIO=${KASM_SVC_AUDIO:-1}
+      - KASM_SVC_AUDIO_INPUT=${KASM_SVC_AUDIO_INPUT:-1}
+      - KASM_SVC_UPLOADS=${KASM_SVC_UPLOADS:-1}
+      - KASM_SVC_DOWNLOADS=${KASM_SVC_DOWNLOADS:-1}
+      # Plugin configuration
+      - ENABLE_CHROME=${ENABLE_CHROME:-false}
+      - ENABLE_NOMACHINE=${ENABLE_NOMACHINE:-false}
+      - ENABLE_CURSOR=${ENABLE_CURSOR:-false}
+      - ENABLE_VSCODE=${ENABLE_VSCODE:-false}
+      - ENABLE_CLAUDE_CODE=${ENABLE_CLAUDE_CODE:-false}
+      - ENABLE_OPENCODE=${ENABLE_OPENCODE:-false}
+      # Homebrew
+      - HOMEBREW_NO_AUTO_UPDATE=${HOMEBREW_NO_AUTO_UPDATE:-1}
+      - HOMEBREW_NO_ANALYTICS=${HOMEBREW_NO_ANALYTICS:-1}
+    volumes:
+      - desktop-home:/home/${USERNAME:-user}
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:6901/"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+
+volumes:
+  desktop-home:
+    name: ${COMPOSE_PROJECT_NAME:-debian-desktop}-kasmvnc-home
+
+networks:
+  default:
+    name: ${COMPOSE_PROJECT_NAME:-debian-desktop}-network

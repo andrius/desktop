@@ -1,0 +1,385 @@
+# GitHub Actions workflow for building KasmVNC variant
+name: Build KasmVNC Image
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'docker/kasmvnc/**'
+      - 'docker/base/**'
+      - 'scripts/**'
+      - '.github/workflows/build-kasmvnc.yml'
+  pull_request:
+    branches:
+      - main
+      - master
+    paths:
+      - 'docker/kasmvnc/**'
+      - 'docker/base/**'
+      - 'scripts/**'
+  workflow_dispatch:
+    inputs:
+      push_image:
+        description: 'Push image to registry'
+        required: false
+        default: false
+        type: boolean
+      skip_tests:
+        description: 'Skip integration tests'
+        required: false
+        default: false
+        type: boolean
+      architectures:
+        description: 'Target architectures (comma-separated: amd64,arm64)'
+        required: false
+        default: 'amd64,arm64'
+        type: string
+  workflow_call:
+    inputs:
+      push_image:
+        description: 'Push image to registry'
+        required: false
+        default: false
+        type: boolean
+      skip_tests:
+        description: 'Skip integration tests'
+        required: false
+        default: false
+        type: boolean
+      architectures:
+        description: 'Target architectures (comma-separated: amd64,arm64)'
+        required: false
+        default: 'amd64,arm64'
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/debian-desktop-kasmvnc
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      platforms_matrix: ${{ steps.prepare.outputs.platforms_matrix }}
+      is_multi_platform: ${{ steps.prepare.outputs.is_multi_platform }}
+      should_push: ${{ steps.prepare.outputs.should_push }}
+
+    steps:
+      - name: Prepare platforms matrix
+        id: prepare
+        run: |
+          EVENT_NAME="${{ github.event_name }}"
+          PUSH_INPUT="${{ inputs.push_image }}"
+          ARCHITECTURES="${{ inputs.architectures || 'amd64,arm64' }}"
+
+          # For PRs without explicit push, use single platform (multi-platform requires push)
+          CAN_PUSH="true"
+          if [ "$EVENT_NAME" == "pull_request" ] && [ "$PUSH_INPUT" != "true" ]; then
+            CAN_PUSH="false"
+            ARCHITECTURES="amd64"
+            echo "::notice::PR detected without push permission - using single platform (amd64)"
+          fi
+
+          python3 << 'EOF'
+          import json
+          import os
+
+          architectures = os.environ.get('ARCHITECTURES', 'amd64').split(',')
+          can_push = os.environ.get('CAN_PUSH', 'false') == 'true'
+          matrix_include = []
+
+          for arch in architectures:
+              arch = arch.strip()
+              platform = f'linux/{arch}'
+              if arch == 'amd64':
+                  runner = 'ubuntu-latest'
+              elif arch == 'arm64':
+                  runner = 'ubuntu-24.04-arm'
+              else:
+                  continue
+              matrix_include.append({'platform': platform, 'arch': arch, 'runner': runner})
+
+          is_multi = 'true' if len(matrix_include) > 1 else 'false'
+          should_push = 'true' if (is_multi == 'true' or can_push) else 'false'
+
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f'platforms_matrix={json.dumps({"include": matrix_include})}\n')
+              f.write(f'is_multi_platform={is_multi}\n')
+              f.write(f'should_push={should_push}\n')
+          EOF
+        env:
+          ARCHITECTURES: ${{ inputs.architectures || 'amd64,arm64' }}
+          CAN_PUSH: ${{ github.event_name != 'pull_request' || inputs.push_image == true }}
+
+  build:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.prepare.outputs.platforms_matrix) }}
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      image_digest: ${{ steps.build.outputs.digest }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        if: matrix.arch == 'arm64' && matrix.runner != 'ubuntu-24.04-arm'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request' || inputs.push_image == true
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Docker Hub login (commented out - uncomment when ready to publish)
+      # - name: Log in to Docker Hub
+      #   if: github.event_name != 'pull_request' || inputs.push_image == true
+      #   uses: docker/login-action@v3
+      #   with:
+      #     registry: docker.io
+      #     username: ${{ vars.DOCKER_USERNAME }}
+      #     password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Copy base scripts to kasmvnc context
+        run: |
+          cp docker/base/scripts/env-setup.sh docker/kasmvnc/scripts/
+          cp docker/base/scripts/init-user.sh docker/kasmvnc/scripts/
+          cp docker/base/scripts/plugin-manager.sh docker/kasmvnc/scripts/
+
+      # Single platform build (load locally)
+      - name: Build KasmVNC image (single platform)
+        if: needs.prepare.outputs.is_multi_platform == 'false'
+        id: build_single
+        uses: docker/build-push-action@v5
+        with:
+          context: ./docker/kasmvnc
+          file: ./docker/kasmvnc/Dockerfile
+          platforms: ${{ matrix.platform }}
+          push: ${{ github.event_name != 'pull_request' || inputs.push_image == true }}
+          load: ${{ github.event_name == 'pull_request' && inputs.push_image != true }}
+          tags: |
+            debian-desktop:kasmvnc-latest
+            ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=kasmvnc-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=kasmvnc-${{ matrix.arch }}
+          build-args: |
+            USERNAME=user
+            USER_UID=1000
+            USER_GID=1000
+
+      # Multi-platform build (push by digest)
+      - name: Build and push by digest (multi-platform)
+        if: needs.prepare.outputs.is_multi_platform == 'true'
+        id: build_multi
+        uses: docker/build-push-action@v5
+        with:
+          context: ./docker/kasmvnc
+          file: ./docker/kasmvnc/Dockerfile
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=kasmvnc-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=kasmvnc-${{ matrix.arch }}
+          build-args: |
+            USERNAME=user
+            USER_UID=1000
+            USER_GID=1000
+
+      - name: Set build output
+        id: build
+        run: |
+          if [ "${{ needs.prepare.outputs.is_multi_platform }}" == "true" ]; then
+            echo "digest=${{ steps.build_multi.outputs.digest }}" >> $GITHUB_OUTPUT
+          else
+            echo "digest=${{ steps.build_single.outputs.digest }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Export digest
+        if: needs.prepare.outputs.is_multi_platform == 'true'
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build_multi.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        if: needs.prepare.outputs.is_multi_platform == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-kasmvnc-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Display image size (single platform only)
+        if: needs.prepare.outputs.is_multi_platform == 'false' && (github.event_name == 'pull_request' && inputs.push_image != true)
+        run: |
+          echo "### Image Size (${{ matrix.arch }})" >> $GITHUB_STEP_SUMMARY
+          docker images debian-desktop:kasmvnc-latest --format "table {{.Repository}}:{{.Tag}}\t{{.Size}}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Generate SBOM
+        if: github.event_name != 'pull_request' && needs.prepare.outputs.is_multi_platform == 'false'
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+
+  merge:
+    needs: [prepare, build]
+    if: needs.prepare.outputs.is_multi_platform == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-kasmvnc-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Docker Hub login (commented out - uncomment when ready to publish)
+      # - name: Log in to Docker Hub
+      #   uses: docker/login-action@v3
+      #   with:
+      #     registry: docker.io
+      #     username: ${{ vars.DOCKER_USERNAME }}
+      #     password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Create multi-platform manifest
+        working-directory: /tmp/digests
+        run: |
+          # Build the list of digest references
+          DIGEST_ARGS=""
+          for f in *; do
+            DIGEST_ARGS="$DIGEST_ARGS ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:$f"
+          done
+
+          echo "Creating manifest with digests:"
+          echo "$DIGEST_ARGS"
+
+          # Create manifest for each tag
+          TAGS=$(echo "${{ steps.meta.outputs.tags }}" | tr '\n' ' ')
+          for tag in $TAGS; do
+            if [ -n "$tag" ]; then
+              echo "Creating manifest for tag: $tag"
+              docker buildx imagetools create --tag "$tag" $DIGEST_ARGS
+            fi
+          done
+
+      - name: Inspect manifest
+        run: |
+          echo "### Multi-Platform Manifest" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }} >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "Manifest inspection skipped" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+  test:
+    needs: [prepare, build, merge]
+    if: always() && inputs.skip_tests != true && (needs.build.result == 'success') && (needs.prepare.outputs.is_multi_platform == 'false' || needs.merge.result == 'success')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Copy base scripts
+        run: |
+          cp docker/base/scripts/env-setup.sh docker/kasmvnc/scripts/
+          cp docker/base/scripts/init-user.sh docker/kasmvnc/scripts/
+          cp docker/base/scripts/plugin-manager.sh docker/kasmvnc/scripts/
+
+      - name: Build image for testing
+        uses: docker/build-push-action@v5
+        with:
+          context: ./docker/kasmvnc
+          file: ./docker/kasmvnc/Dockerfile
+          load: true
+          tags: debian-desktop:kasmvnc-latest
+          cache-from: type=gha,scope=kasmvnc-amd64
+          build-args: |
+            USERNAME=user
+            USER_UID=1000
+            USER_GID=1000
+
+      - name: Run integration tests
+        id: test
+        run: |
+          chmod +x scripts/test-image.sh
+          ./scripts/test-image.sh kasmvnc --verbose
+
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kasmvnc-test-logs
+          path: |
+            /tmp/*.log
+          retention-days: 7
+
+      - name: Test Summary
+        if: always()
+        run: |
+          echo "### KasmVNC Integration Test Results" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.test.outcome }}" == "success" ]; then
+            echo "All tests passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "Tests failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Tests performed:**" >> $GITHUB_STEP_SUMMARY
+          echo "- Container startup" >> $GITHUB_STEP_SUMMARY
+          echo "- Web interface accessibility (port 6901)" >> $GITHUB_STEP_SUMMARY
+          echo "- Web content validation" >> $GITHUB_STEP_SUMMARY
+          echo "- Health check verification" >> $GITHUB_STEP_SUMMARY
+          echo "- Log analysis for errors" >> $GITHUB_STEP_SUMMARY

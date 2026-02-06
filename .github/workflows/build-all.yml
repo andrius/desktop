@@ -1,0 +1,160 @@
+# GitHub Actions workflow for building all image variants
+name: Build All Images
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'v*'
+  schedule:
+    # Build weekly on Sunday at midnight UTC
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+    inputs:
+      push_images:
+        description: 'Push images to registry'
+        required: false
+        default: true
+        type: boolean
+      skip_tests:
+        description: 'Skip integration tests'
+        required: false
+        default: false
+        type: boolean
+      architectures:
+        description: 'Target architectures (comma-separated: amd64,arm64)'
+        required: false
+        default: 'amd64,arm64'
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_BASE: ${{ github.repository }}
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      platforms_matrix: ${{ steps.prepare.outputs.platforms_matrix }}
+      is_multi_platform: ${{ steps.prepare.outputs.is_multi_platform }}
+      architectures: ${{ steps.prepare.outputs.architectures }}
+
+    steps:
+      - name: Prepare platforms matrix
+        id: prepare
+        run: |
+          ARCHITECTURES="${{ inputs.architectures || 'amd64,arm64' }}"
+
+          python3 << 'EOF'
+          import json
+          import os
+
+          architectures = os.environ.get('ARCHITECTURES', 'amd64').split(',')
+          matrix_include = []
+
+          for arch in architectures:
+              arch = arch.strip()
+              platform = f'linux/{arch}'
+              if arch == 'amd64':
+                  runner = 'ubuntu-latest'
+              elif arch == 'arm64':
+                  runner = 'ubuntu-24.04-arm'
+              else:
+                  continue
+              matrix_include.append({'platform': platform, 'arch': arch, 'runner': runner})
+
+          is_multi = 'true' if len(matrix_include) > 1 else 'false'
+          arch_list = ','.join([m['arch'] for m in matrix_include])
+
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f'platforms_matrix={json.dumps({"include": matrix_include})}\n')
+              f.write(f'is_multi_platform={is_multi}\n')
+              f.write(f'architectures={arch_list}\n')
+          EOF
+        env:
+          ARCHITECTURES: ${{ inputs.architectures || 'amd64,arm64' }}
+
+  build-kasmvnc:
+    needs: prepare
+    uses: ./.github/workflows/build-kasmvnc.yml
+    with:
+      push_image: ${{ inputs.push_images != false }}
+      skip_tests: ${{ inputs.skip_tests == true }}
+      architectures: ${{ needs.prepare.outputs.architectures }}
+    secrets: inherit
+
+  build-selkies:
+    needs: prepare
+    uses: ./.github/workflows/build-selkies.yml
+    with:
+      push_image: ${{ inputs.push_images != false }}
+      skip_tests: ${{ inputs.skip_tests == true }}
+      architectures: ${{ needs.prepare.outputs.architectures }}
+    secrets: inherit
+
+  security-scan:
+    needs: [prepare, build-kasmvnc, build-selkies]
+    runs-on: ubuntu-latest
+    if: always() && (needs.build-kasmvnc.result == 'success' || needs.build-kasmvnc.result == 'skipped') && (needs.build-selkies.result == 'success' || needs.build-selkies.result == 'skipped')
+    permissions:
+      contents: read
+      security-events: write
+
+    strategy:
+      matrix:
+        variant: [kasmvnc, selkies]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Copy base scripts
+        run: |
+          cp docker/base/scripts/env-setup.sh docker/${{ matrix.variant }}/scripts/
+          cp docker/base/scripts/init-user.sh docker/${{ matrix.variant }}/scripts/
+          cp docker/base/scripts/plugin-manager.sh docker/${{ matrix.variant }}/scripts/
+
+      - name: Build image for scanning
+        uses: docker/build-push-action@v5
+        with:
+          context: ./docker/${{ matrix.variant }}
+          load: true
+          tags: debian-desktop:${{ matrix.variant }}-latest
+          cache-from: type=gha,scope=${{ matrix.variant }}-amd64
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'debian-desktop:${{ matrix.variant }}-latest'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  summary:
+    needs: [prepare, build-kasmvnc, build-selkies, security-scan]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Generate Summary
+        run: |
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Architectures:** ${{ needs.prepare.outputs.architectures }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Multi-platform:** ${{ needs.prepare.outputs.is_multi_platform }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Image | Build | Security |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|----------|" >> $GITHUB_STEP_SUMMARY
+          echo "| KasmVNC | ${{ needs.build-kasmvnc.result == 'success' && 'Pass' || (needs.build-kasmvnc.result == 'skipped' && 'Skipped' || 'Failed') }} | ${{ needs.security-scan.result == 'success' && 'Pass' || (needs.security-scan.result == 'skipped' && 'Skipped' || 'Failed') }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Selkies | ${{ needs.build-selkies.result == 'success' && 'Pass' || (needs.build-selkies.result == 'skipped' && 'Skipped' || 'Failed') }} | ${{ needs.security-scan.result == 'success' && 'Pass' || (needs.security-scan.result == 'skipped' && 'Skipped' || 'Failed') }} |" >> $GITHUB_STEP_SUMMARY

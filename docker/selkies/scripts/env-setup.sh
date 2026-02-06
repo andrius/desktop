@@ -1,0 +1,43 @@
+#!/bin/bash
+# Environment setup script
+# Loads configuration from environment variables
+
+# Default values
+export USERNAME="${USERNAME:-user}"
+export USER="${USERNAME}"
+export HOME="${HOME:-/home/${USERNAME}}"
+export DISPLAY="${DISPLAY:-:1}"
+export RESOLUTION="${RESOLUTION:-1920x1080x24}"
+export TZ="${TZ:-UTC}"
+export LANG="${LANG:-en_US.UTF-8}"
+export LANGUAGE="${LANGUAGE:-en_US:en}"
+export LC_ALL="${LC_ALL:-en_US.UTF-8}"
+
+# XDG directories
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/runtime-${USERNAME}}"
+export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-${HOME}/.config}"
+export XDG_DATA_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}"
+export XDG_CACHE_HOME="${XDG_CACHE_HOME:-${HOME}/.cache}"
+
+# Homebrew
+export HOMEBREW_PREFIX="/home/linuxbrew/.linuxbrew"
+export HOMEBREW_NO_AUTO_UPDATE="${HOMEBREW_NO_AUTO_UPDATE:-1}"
+export HOMEBREW_NO_ANALYTICS="${HOMEBREW_NO_ANALYTICS:-1}"
+if [ -d "$HOMEBREW_PREFIX" ]; then
+    export PATH="${HOMEBREW_PREFIX}/bin:${HOMEBREW_PREFIX}/sbin:${PATH}"
+fi
+
+# Plugin configuration (from .env)
+export ENABLE_CHROME="${ENABLE_CHROME:-false}"
+export ENABLE_NOMACHINE="${ENABLE_NOMACHINE:-false}"
+export ENABLE_CURSOR="${ENABLE_CURSOR:-false}"
+export ENABLE_VSCODE="${ENABLE_VSCODE:-false}"
+export ENABLE_CLAUDE_CODE="${ENABLE_CLAUDE_CODE:-false}"
+export ENABLE_OPENCODE="${ENABLE_OPENCODE:-false}"
+
+# VNC configuration
+export VNC_PORT="${VNC_PORT:-5900}"
+export VNC_WEB_PORT="${VNC_WEB_PORT:-6080}"
+export VNC_PASSWORD="${VNC_PASSWORD:-}"
+
+echo "Environment configured for user: ${USERNAME}"
