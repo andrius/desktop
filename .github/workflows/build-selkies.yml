@@ -70,13 +70,24 @@ jobs:
       - name: Prepare platforms matrix
         id: prepare
         run: |
+          EVENT_NAME="${{ github.event_name }}"
+          PUSH_INPUT="${{ inputs.push_image }}"
           ARCHITECTURES="${{ inputs.architectures || 'amd64,arm64' }}"
+
+          # For PRs without explicit push, use single platform (multi-platform requires push)
+          CAN_PUSH="true"
+          if [ "$EVENT_NAME" == "pull_request" ] && [ "$PUSH_INPUT" != "true" ]; then
+            CAN_PUSH="false"
+            ARCHITECTURES="amd64"
+            echo "::notice::PR detected without push permission - using single platform (amd64)"
+          fi
 
           python3 << 'EOF'
           import json
           import os
 
           architectures = os.environ.get('ARCHITECTURES', 'amd64').split(',')
+          can_push = os.environ.get('CAN_PUSH', 'false') == 'true'
           matrix_include = []
 
           for arch in architectures:
@@ -91,31 +102,16 @@ jobs:
               matrix_include.append({'platform': platform, 'arch': arch, 'runner': runner})
 
           is_multi = 'true' if len(matrix_include) > 1 else 'false'
+          should_push = 'true' if (is_multi == 'true' or can_push) else 'false'
 
           with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
               f.write(f'platforms_matrix={json.dumps({"include": matrix_include})}\n')
               f.write(f'is_multi_platform={is_multi}\n')
+              f.write(f'should_push={should_push}\n')
           EOF
         env:
           ARCHITECTURES: ${{ inputs.architectures || 'amd64,arm64' }}
-
-      - name: Determine push strategy
-        id: push_strategy
-        run: |
-          IS_MULTI="${{ steps.prepare.outputs.is_multi_platform }}"
-          PUSH_INPUT="${{ inputs.push_image }}"
-          EVENT_NAME="${{ github.event_name }}"
-
-          # Multi-platform builds require push
-          if [ "$IS_MULTI" == "true" ]; then
-            echo "should_push=true" >> $GITHUB_OUTPUT
-          elif [ "$PUSH_INPUT" == "true" ]; then
-            echo "should_push=true" >> $GITHUB_OUTPUT
-          elif [ "$EVENT_NAME" != "pull_request" ]; then
-            echo "should_push=true" >> $GITHUB_OUTPUT
-          else
-            echo "should_push=false" >> $GITHUB_OUTPUT
-          fi
+          CAN_PUSH: ${{ github.event_name != 'pull_request' || inputs.push_image == true }}
 
   build:
     needs: prepare

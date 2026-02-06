@@ -1,11 +1,11 @@
 # Debian 13 Trixie Desktop with KasmVNC
-# Based on the base desktop image, adds KasmVNC for web-based remote access
+# Optimized for minimal image size with Openbox + XFCE components
 ARG DEBIAN_VERSION=trixie
 FROM debian:${DEBIAN_VERSION}
 
 LABEL maintainer="Desktop Docker Project"
-LABEL description="Debian Trixie Desktop with XFCE4 and KasmVNC"
-LABEL version="1.0.0"
+LABEL description="Debian Trixie Desktop with Openbox/XFCE4 and KasmVNC"
+LABEL version="1.1.0"
 LABEL vnc.type="kasmvnc"
 
 # Build arguments
@@ -14,6 +14,7 @@ ARG USER_UID=1000
 ARG USER_GID=1000
 ARG DEBIAN_FRONTEND=noninteractive
 ARG KASMVNC_VERSION=1.3.3
+ARG TARGETARCH
 
 # Environment variables
 ENV LANG=en_US.UTF-8 \
@@ -37,11 +38,10 @@ ENV VNC_PORT=5901 \
     KASM_SVC_UPLOADS=1 \
     KASM_SVC_DOWNLOADS=1
 
-# Install base system packages
+# RUN 1: Install all system packages + minimal desktop + KasmVNC deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    # Init system
+    # Init system (tini only - dumb-init redundant)
     tini \
-    dumb-init \
     # Locales and utilities
     locales \
     sudo \
@@ -52,9 +52,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     lsb-release \
     apt-transport-https \
     git \
-    vim \
-    nano \
-    htop \
     procps \
     psmisc \
     net-tools \
@@ -67,24 +64,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     file \
     less \
     jq \
-    # Build essentials for Homebrew
-    build-essential \
     # SSL for KasmVNC
     openssl \
     ssl-cert \
-    && rm -rf /var/lib/apt/lists/*
-
-# Configure locales
-RUN sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && \
-    locale-gen en_US.UTF-8
-
-# Install X11 and desktop environment
-RUN apt-get update && apt-get install -y --no-install-recommends \
     # Xorg and utilities
     xorg \
     x11-xserver-utils \
     x11-utils \
-    x11-apps \
     xauth \
     xdg-utils \
     xdg-user-dirs \
@@ -94,34 +80,31 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     libegl1 \
     libglu1-mesa \
-    # XFCE4 desktop
-    xfce4 \
-    xfce4-terminal \
-    xfce4-taskmanager \
-    xfce4-screenshooter \
-    xfce4-notifyd \
-    xfce4-power-manager \
-    xfce4-settings \
+    # Window manager (Openbox - lighter than xfwm4)
+    openbox \
+    obconf \
+    # XFCE4 components (selective - not full xfce4 metapackage)
+    libxfce4ui-utils \
     xfce4-panel \
-    thunar \
-    thunar-archive-plugin \
+    xfce4-session \
+    xfce4-settings \
+    xfce4-terminal \
+    xfconf \
+    xfdesktop4 \
+    # File manager (PCManFM - lighter than Thunar)
+    pcmanfm \
     # Desktop utilities
     dbus-x11 \
-    at-spi2-core \
-    # Fonts
+    # Fonts (minimal)
     fonts-dejavu-core \
     fonts-liberation \
-    fonts-noto-core \
-    fonts-noto-color-emoji \
     fontconfig \
     # Audio
     pulseaudio \
     pulseaudio-utils \
     libpulse0 \
-    # Themes and icons
+    # Theme (single - adwaita only)
     adwaita-icon-theme \
-    gnome-themes-extra \
-    papirus-icon-theme \
     # KasmVNC dependencies
     libjpeg62-turbo \
     libpng16-16 \
@@ -136,31 +119,35 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxtst6 \
     x11-xkb-utils \
     xkb-data \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Firefox ESR
-RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Browser
     firefox-esr \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
+    # Remove unnecessary autostart items
+    && rm -f /etc/xdg/autostart/xfce4-power-manager.desktop 2>/dev/null || true \
+    && rm -f /etc/xdg/autostart/xscreensaver.desktop 2>/dev/null || true
 
-# Install KasmVNC
-RUN cd /tmp && \
-    KASM_ARCH="amd64" && \
+# RUN 2: Configure locale + Install KasmVNC + Create user + Setup directories
+# Re-declare TARGETARCH for this stage (provided by buildx)
+ARG TARGETARCH
+RUN sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && locale-gen en_US.UTF-8 && \
+    # Install KasmVNC (architecture auto-detected from buildx TARGETARCH)
+    cd /tmp && \
+    KASM_ARCH="${TARGETARCH:-amd64}" && \
     KASM_RELEASE="bookworm" && \
     wget -q "https://github.com/kasmtech/KasmVNC/releases/download/v${KASMVNC_VERSION}/kasmvncserver_${KASM_RELEASE}_${KASMVNC_VERSION}_${KASM_ARCH}.deb" -O kasmvnc.deb && \
     apt-get update && \
     apt-get install -y ./kasmvnc.deb && \
     rm -f kasmvnc.deb && \
-    rm -rf /var/lib/apt/lists/*
-
-# Create user with passwordless sudo
-RUN groupadd --gid ${USER_GID} ${USERNAME} && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* && \
+    # Create user with passwordless sudo
+    groupadd --gid ${USER_GID} ${USERNAME} && \
     useradd --uid ${USER_UID} --gid ${USER_GID} -m -s /bin/bash ${USERNAME} && \
     echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${USERNAME} && \
-    chmod 0440 /etc/sudoers.d/${USERNAME}
-
-# Create necessary directories
-RUN mkdir -p /home/${USERNAME}/.config/xfce4 \
+    chmod 0440 /etc/sudoers.d/${USERNAME} && \
+    # Create necessary directories
+    mkdir -p /home/${USERNAME}/.config/xfce4 \
+             /home/${USERNAME}/.config/openbox \
              /home/${USERNAME}/.local/share \
              /home/${USERNAME}/.cache \
              /home/${USERNAME}/.vnc \
@@ -171,32 +158,16 @@ RUN mkdir -p /home/${USERNAME}/.config/xfce4 \
     chown -R ${USERNAME}:${USERNAME} /home/${USERNAME} && \
     chmod 700 /tmp/runtime-${USERNAME}
 
-# Install Homebrew
-USER ${USERNAME}
-WORKDIR /home/${USERNAME}
-
-RUN NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-# Add Homebrew to PATH
-ENV PATH="/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:${PATH}"
-ENV HOMEBREW_NO_AUTO_UPDATE=1
-ENV HOMEBREW_NO_ANALYTICS=1
-
-# Configure shell for Homebrew
-RUN echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"' >> /home/${USERNAME}/.bashrc && \
-    echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"' >> /home/${USERNAME}/.profile
-
-# Switch back to root for system configuration
-USER root
-
-# Copy scripts (base scripts should be copied to scripts/ directory before build)
-# The GitHub workflow or build script handles copying base scripts
+# Copy scripts
 COPY --chmod=755 scripts/ /opt/desktop/scripts/
 COPY --chmod=755 configs/ /opt/desktop/configs/
 
 # Create plugin directory
 RUN mkdir -p /opt/desktop/plugins && \
     chown -R ${USERNAME}:${USERNAME} /opt/desktop
+
+# Set working directory
+WORKDIR /home/${USERNAME}
 
 # Expose ports
 # 5901: VNC port
