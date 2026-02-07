@@ -57,6 +57,10 @@ mkdir -p "${HOME}/.config/kasmvnc"
 echo "xfce" > "${HOME}/.config/kasmvnc/.de"
 echo "xfce" > "${HOME}/.vnc/.de"
 
+# Mark DE as already selected so select-de.sh skips interactive prompt
+# and preserves our custom xstartup (which initializes D-Bus properly)
+touch "${VNC_DIR}/.de-was-selected"
+
 # Create xstartup script
 cat > "${VNC_DIR}/xstartup" << 'EOF'
 #!/bin/bash
@@ -117,9 +121,8 @@ echo "$KASMVNC_CONFIG" > "${VNC_DIR}/kasmvnc.yaml"
 # Clean up any existing VNC locks (may be root-owned from previous run)
 sudo rm -f /tmp/.X*-lock /tmp/.X11-unix/X* 2>/dev/null || true
 
-# Start KasmVNC server with select-de flag to avoid interactive prompt
+# Start KasmVNC server (DE pre-selected via .de files above)
 echo "Launching vncserver..."
-export SELECT_DE=xfce
 vncserver ${VNC_DISPLAY} \
     -depth ${VNC_COL_DEPTH} \
     -geometry ${VNC_RESOLUTION} \
@@ -127,7 +130,6 @@ vncserver ${VNC_DISPLAY} \
     -httpd /usr/share/kasmvnc/www \
     -interface 0.0.0.0 \
     -disableBasicAuth \
-    -select-de xfce \
     -fg
 
 # Keep container running

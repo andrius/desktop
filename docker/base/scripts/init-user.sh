@@ -139,6 +139,8 @@ EOF
 fi
 
 # Set up desktop background (solid space gray #3d3d3d)
+# Include both monitorscreen and monitorVNC-0 paths since KasmVNC
+# creates a display named "VNC-0" (xfdesktop uses "monitor" + xrandr name)
 if [ ! -f "${HOME}/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml" ]; then
     cat > "${HOME}/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml" << 'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -146,6 +148,18 @@ if [ ! -f "${HOME}/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml" ]
   <property name="backdrop" type="empty">
     <property name="screen0" type="empty">
       <property name="monitorscreen" type="empty">
+        <property name="workspace0" type="empty">
+          <property name="color-style" type="int" value="0"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="rgba1" type="array">
+            <value type="double" value="0.23921568627"/>
+            <value type="double" value="0.23921568627"/>
+            <value type="double" value="0.23921568627"/>
+            <value type="double" value="1.0"/>
+          </property>
+        </property>
+      </property>
+      <property name="monitorVNC-0" type="empty">
         <property name="workspace0" type="empty">
           <property name="color-style" type="int" value="0"/>
           <property name="image-style" type="int" value="0"/>
@@ -246,22 +260,47 @@ AUTOSTART
 
 cat > /opt/desktop/scripts/desktop-setup.sh << SETUP
 #!/bin/bash
+# Wait for gvfsd-metadata to start (required for gio set metadata::trusted)
+for i in \$(seq 1 15); do
+    pgrep -u "\$(whoami)" gvfsd-metadata >/dev/null 2>&1 && break
+    sleep 1
+done
+
 # Allow local user connections to X display (needed for sudo -u user apps)
 xhost +local: 2>/dev/null || true
 
 # Mark desktop shortcuts as trusted so xfdesktop can execute them
+# XFCE 4.18+ uses metadata::xfce-exe-checksum (SHA256) to verify trust
 if command -v gio >/dev/null 2>&1; then
     for f in "${HOME}/Desktop/"*.desktop; do
-        [ -f "\$f" ] && gio set "\$f" metadata::trusted true 2>/dev/null || true
+        if [ -f "\$f" ]; then
+            CHECKSUM=\$(sha256sum "\$f" | cut -d' ' -f1)
+            gio set "\$f" metadata::xfce-exe-checksum "\$CHECKSUM" 2>/dev/null || true
+            gio set "\$f" metadata::trusted true 2>/dev/null || true
+        fi
     done
 fi
 
-# Fallback: set desktop background color via xfconf-query
-# The XML config monitor name may not match the runtime monitor name
+# Set desktop background color via xfconf-query
+# xfdesktop uses "monitor" + xrandr output name (e.g., monitorVNC-0)
 if command -v xfconf-query >/dev/null 2>&1; then
-    xfconf-query -c xfce4-desktop -p /backdrop/screen0 -r -R 2>/dev/null || true
-    xfconf-query -c xfce4-desktop -n -t int -p /backdrop/screen0/monitorscreen/workspace0/color-style -s 0 2>/dev/null || true
-    xfconf-query -c xfce4-desktop -n -t int -p /backdrop/screen0/monitorscreen/workspace0/image-style -s 0 2>/dev/null || true
+    set_backdrop() {
+        local ws_path="\$1"
+        xfconf-query -c xfce4-desktop -n -t int -p "\${ws_path}/color-style" -s 0 2>/dev/null || true
+        xfconf-query -c xfce4-desktop -n -t int -p "\${ws_path}/image-style" -s 0 2>/dev/null || true
+        xfconf-query -c xfce4-desktop -n \
+            -p "\${ws_path}/rgba1" \
+            -t double -t double -t double -t double \
+            -s 0.23921568627 -s 0.23921568627 -s 0.23921568627 -s 1.0 2>/dev/null || true
+    }
+
+    # Detect monitor name from xrandr (e.g., VNC-0)
+    XRANDR_MONITOR=\$(xrandr 2>/dev/null | grep ' connected' | awk '{print \$1}' | head -1)
+    if [ -n "\$XRANDR_MONITOR" ]; then
+        set_backdrop "/backdrop/screen0/monitor\${XRANDR_MONITOR}/workspace0"
+    fi
+    # Also set fallback path
+    set_backdrop "/backdrop/screen0/monitorscreen/workspace0"
 fi
 SETUP
 chmod +x /opt/desktop/scripts/desktop-setup.sh

@@ -1,10 +1,10 @@
 # Debian 13 Trixie Desktop with KasmVNC
-# Optimized for minimal image size with Openbox + XFCE components
+# XFCE4 desktop with xfwm4 window manager
 ARG DEBIAN_VERSION=trixie
 FROM debian:${DEBIAN_VERSION}
 
 LABEL maintainer="Desktop Docker Project"
-LABEL description="Debian Trixie Desktop with Openbox/XFCE4 and KasmVNC"
+LABEL description="Debian Trixie Desktop with XFCE4 and KasmVNC"
 LABEL version="1.1.0"
 LABEL vnc.type="kasmvnc"
 
@@ -81,9 +81,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     libegl1 \
     libglu1-mesa \
-    # Window manager (Openbox - lighter than xfwm4)
-    openbox \
-    obconf \
+    # Window manager (native XFCE window manager)
+    xfwm4 \
     # XFCE4 components (selective - not full xfce4 metapackage)
     libxfce4ui-utils \
     xfce4-panel \
@@ -151,7 +150,6 @@ RUN sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && locale-gen en_US.UTF-8 && 
     chmod 0440 /etc/sudoers.d/${USERNAME} && \
     # Create necessary directories
     mkdir -p /home/${USERNAME}/.config/xfce4 \
-             /home/${USERNAME}/.config/openbox \
              /home/${USERNAME}/.local/share \
              /home/${USERNAME}/.cache \
              /home/${USERNAME}/.vnc \
