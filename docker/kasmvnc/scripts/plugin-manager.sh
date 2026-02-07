@@ -27,7 +27,6 @@ compat_enable_vars() {
         [ENABLE_CURSOR]="cursor"
         [ENABLE_VSCODE]="vscode"
         [ENABLE_CLAUDE_CODE]="claude-code"
-        [ENABLE_OPENCODE]="opencode"
         [ENABLE_XRDP]="xrdp"
         [ENABLE_DOCKER]="docker"
         [ENABLE_BREW]="brew"

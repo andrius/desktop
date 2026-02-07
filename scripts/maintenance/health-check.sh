@@ -105,8 +105,6 @@ echo ""
 log_info "VNC Server:"
 if pgrep -f "kasmvnc" > /dev/null || pgrep -f "vncserver" > /dev/null; then
     check_pass "KasmVNC server is running"
-elif pgrep -f "selkies" > /dev/null; then
-    check_pass "Selkies WebRTC server is running"
 else
     check_warn "No VNC server detected"
 fi

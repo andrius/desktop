@@ -20,4 +20,4 @@ No port forwarding required — Chrome is a desktop application accessed through
 ## Notes
 
 - The `--no-sandbox` flag is required when running inside a Docker container
-- Chrome runs within the existing desktop session (KasmVNC, Selkies, XRDP, or NoMachine)
+- Chrome runs within the existing desktop session (KasmVNC, XRDP, or NoMachine)
