@@ -18,32 +18,15 @@ log "Installing Cursor..."
 # Detect architecture
 ARCH=$(dpkg --print-architecture)
 case "$ARCH" in
-    amd64)  CURSOR_ARCH="x64" ;;
-    arm64)  CURSOR_ARCH="arm64" ;;
+    amd64)  DEB_URL="https://api2.cursor.sh/updates/download/golden/linux-x64-deb/cursor/2.4" ;;
+    arm64)  DEB_URL="https://api2.cursor.sh/updates/download/golden/linux-arm64-deb/cursor/2.4" ;;
     *)
         log "ERROR: Unsupported architecture: ${ARCH}"
         exit 1
         ;;
 esac
 
-# Discover latest .deb URL from official API
-CURSOR_API="https://cursor.com/api/download?platform=linux-${CURSOR_ARCH}&releaseTrack=stable"
-log "Querying API: ${CURSOR_API}"
-
-API_RESPONSE=$(wget -q -O - "${CURSOR_API}" 2>/dev/null) || {
-    log "ERROR: Failed to query Cursor API"
-    exit 1
-}
-
-DEB_URL=$(echo "$API_RESPONSE" | grep -oP '"debUrl"\s*:\s*"\K[^"]+' | head -1)
-VERSION=$(echo "$API_RESPONSE" | grep -oP '"version"\s*:\s*"\K[^"]+' | head -1)
-
-if [ -z "$DEB_URL" ]; then
-    log "ERROR: Could not resolve .deb download URL from API"
-    exit 1
-fi
-
-log "Downloading Cursor ${VERSION} (${ARCH}) from: ${DEB_URL}"
+log "Downloading Cursor (${ARCH}) from: ${DEB_URL}"
 cd /tmp
 wget -q -O cursor.deb "${DEB_URL}"
 
@@ -66,4 +49,4 @@ if [ -f /usr/share/applications/cursor.desktop ]; then
     chown "${USERNAME}:${USERNAME}" "${HOME}/Desktop/Cursor.desktop"
 fi
 
-log "Cursor ${VERSION} installed successfully"
+log "Cursor installed successfully"
