@@ -49,6 +49,12 @@ fi
 echo "${TARGET_USER} ALL=(ALL) NOPASSWD:ALL" > "/etc/sudoers.d/${TARGET_USER}"
 chmod 0440 "/etc/sudoers.d/${TARGET_USER}"
 
+# --- Set user password if provided (required for NoMachine/XRDP PAM login) ---
+if [ -n "${USER_PASSWORD:-}" ]; then
+    echo "${TARGET_USER}:${USER_PASSWORD}" | chpasswd
+    echo "User password set for ${TARGET_USER}"
+fi
+
 # --- Home directory ---
 USER_HOME="/home/${TARGET_USER}"
 mkdir -p "$USER_HOME"

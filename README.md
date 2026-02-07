@@ -17,8 +17,8 @@ A fully-featured Debian 13 (Trixie) desktop environment running in Docker with w
 
 ```bash
 # Clone the repository
-git clone <repository-url>
-cd debian-docker-desktop
+git clone https://github.com/andrius/desktop.git
+cd desktop
 
 # Copy and configure environment
 cp .env.example .env
@@ -42,6 +42,7 @@ cp .env.example .env
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `USERNAME` | `user` | Desktop username |
+| `USER_PASSWORD` | (empty) | Linux user password (required for XRDP/NoMachine login) |
 | `RESOLUTION` | `1920x1080x24` | Screen resolution |
 | `TZ` | `UTC` | Timezone |
 | `VNC_PW` | `vncpassword` | VNC password |
@@ -113,6 +114,14 @@ make build
 
 # Or using docker compose
 docker compose build
+```
+
+### Pre-built Images
+
+Pre-built images are available from GitHub Container Registry:
+
+```bash
+docker pull ghcr.io/andrius/desktop:latest
 ```
 
 ### Using GitHub Actions
@@ -218,8 +227,9 @@ docker compose exec desktop bash
 
 ## Security Considerations
 
-- Change the default VNC password in production
-- Consider using HTTPS/TLS termination with a reverse proxy
+- Change the default VNC password (`VNC_PW`) in production
+- Set `USER_PASSWORD` when using XRDP or NoMachine plugins (required for PAM login)
+- Enable KasmVNC SSL with `KASMVNC_ENABLE_SSL=true`, or use HTTPS/TLS termination with a reverse proxy
 - The container runs with `seccomp:unconfined` for desktop functionality
 - Use network isolation in production environments
 - Regularly update the container for security patches
@@ -230,7 +240,7 @@ MIT License - See [LICENSE](LICENSE) file for details.
 
 ## Contributing
 
-Contributions are welcome! Please read the contributing guidelines and submit pull requests.
+Contributions are welcome! Please open issues or submit pull requests at [github.com/andrius/desktop](https://github.com/andrius/desktop).
 
 ## Acknowledgments
 

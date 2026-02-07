@@ -9,6 +9,7 @@ This guide covers all configuration options for the Debian Docker Desktop.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `USERNAME` | `user` | Username for the desktop user |
+| `USER_PASSWORD` | (empty) | Linux user password (required for XRDP/NoMachine PAM login) |
 | `USER_UID` | `1000` | User ID (for volume permissions) |
 | `USER_GID` | `1000` | Group ID (for volume permissions) |
 
@@ -34,6 +35,7 @@ This guide covers all configuration options for the Debian Docker Desktop.
 | `KASM_SVC_AUDIO_INPUT` | `1` | Enable audio input |
 | `KASM_SVC_UPLOADS` | `1` | Enable file uploads |
 | `KASM_SVC_DOWNLOADS` | `1` | Enable file downloads |
+| `KASMVNC_ENABLE_SSL` | `false` | Enable SSL with self-signed certificate |
 
 ### Plugin Configuration
 
@@ -133,6 +135,8 @@ PLUGINS=brew,vscode,cursor,claude-code
 
 ```bash
 VNC_PW=very_secure_password_here
+USER_PASSWORD=strong_user_password
+KASMVNC_ENABLE_SSL=true
 ```
 
 ### Custom Timezone
@@ -197,6 +201,8 @@ Or via command line:
 
 ```bash
 docker run -p 8443:6901 -p 5900:5901 desktop:latest
+# Or use the pre-built image from the registry:
+docker run -p 8443:6901 -p 5900:5901 ghcr.io/andrius/desktop:latest
 ```
 
 ## Volume Configuration

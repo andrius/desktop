@@ -27,6 +27,7 @@ services:
       - USERNAME=${USERNAME:-user}
       - USER_UID=${USER_UID:-1000}
       - USER_GID=${USER_GID:-1000}
+      - USER_PASSWORD=${USER_PASSWORD:-}
       # Display configuration
       - DISPLAY=${DISPLAY:-:1}
       - RESOLUTION=${RESOLUTION:-1920x1080x24}
@@ -39,6 +40,7 @@ services:
       - VNC_RESOLUTION=${VNC_RESOLUTION:-1920x1080}
       - VNC_COL_DEPTH=${VNC_COL_DEPTH:-24}
       # KasmVNC features
+      - KASMVNC_ENABLE_SSL=${KASMVNC_ENABLE_SSL:-false}
       - KASM_SVC_AUDIO=${KASM_SVC_AUDIO:-1}
       - KASM_SVC_AUDIO_INPUT=${KASM_SVC_AUDIO_INPUT:-1}
       - KASM_SVC_UPLOADS=${KASM_SVC_UPLOADS:-1}
@@ -54,7 +56,7 @@ services:
       # Uncomment for Docker socket passthrough (alternative to PLUGINS=docker DinD):
       # - /var/run/docker.sock:/var/run/docker.sock
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:6901/"]
+      test: ["CMD-SHELL", "curl -sfk http://localhost:6901/ || curl -sfk https://localhost:6901/"]
       interval: 30s
       timeout: 10s
       start_period: 30s

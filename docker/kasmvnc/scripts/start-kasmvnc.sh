@@ -20,14 +20,32 @@ VNC_PW="${VNC_PW:-vncpassword}"
 HOME="${HOME:-/home/${USERNAME}}"
 VNC_DIR="${HOME}/.vnc"
 
+# Create VNC directory
+mkdir -p "${VNC_DIR}"
+
+# Optional SSL support
+KASMVNC_ENABLE_SSL="${KASMVNC_ENABLE_SSL:-false}"
+SSL_REQUIRE="false"
+SSL_PEM=""
+if [ "$KASMVNC_ENABLE_SSL" = "true" ]; then
+    SSL_CERT="${VNC_DIR}/self.pem"
+    if [ ! -f "$SSL_CERT" ]; then
+        openssl req -x509 -nodes -days 3650 \
+            -newkey rsa:2048 -keyout "$SSL_CERT" -out "$SSL_CERT" \
+            -subj "/CN=desktop" 2>/dev/null
+    fi
+    SSL_REQUIRE="true"
+    SSL_PEM="$SSL_CERT"
+fi
+
 echo "Starting KasmVNC server..."
 echo "  Display: ${VNC_DISPLAY}"
 echo "  Resolution: ${VNC_RESOLUTION}"
 echo "  VNC Port: ${VNC_INTERNAL_PORT}"
 echo "  Web Port: ${VNC_INTERNAL_WEB_PORT}"
-
-# Create VNC directory
-mkdir -p "${VNC_DIR}"
+if [ "$KASMVNC_ENABLE_SSL" = "true" ]; then
+    echo "  SSL: enabled (self-signed)"
+fi
 
 # Set VNC password using KasmVNC syntax
 # KasmVNC uses user-based authentication
@@ -80,7 +98,8 @@ network:
   interface: 0.0.0.0
   websocket_port: ${VNC_INTERNAL_WEB_PORT}
   ssl:
-    require_ssl: false
+    require_ssl: ${SSL_REQUIRE}
+    pem_certificate: ${SSL_PEM}
 
 user_session:
   session_type: shared

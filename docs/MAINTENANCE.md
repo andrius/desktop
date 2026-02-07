@@ -262,7 +262,11 @@ apt-get update && apt-get upgrade -y --only-upgrade
 The GitHub Actions workflows include automated vulnerability scanning with Trivy. You can also run locally:
 
 ```bash
-# Scan with Trivy
+# Scan locally built image
 docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
   aquasec/trivy image desktop:latest
+
+# Scan registry image
+docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+  aquasec/trivy image ghcr.io/andrius/desktop:latest
 ```
