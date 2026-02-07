@@ -351,8 +351,6 @@ jobs:
         exclude:
           - plugin: chrome
             arch: arm64
-          - plugin: cursor
-            arch: arm64
     runs-on: ${{ matrix.runner }}
 
     steps:
@@ -387,7 +385,7 @@ jobs:
       - name: Test plugin ${{ matrix.plugin }}
         run: |
           chmod +x scripts/test-plugins.sh
-          ./scripts/test-plugins.sh ${{ matrix.plugin }} --verbose
+          ./scripts/test-plugins.sh ${{ matrix.plugin }} --variant selkies --verbose
 
       - name: Plugin Test Summary
         if: always()

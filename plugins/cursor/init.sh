@@ -26,10 +26,29 @@ case "$ARCH" in
         ;;
 esac
 
-CURSOR_URL="https://downloader.cursor.sh/linux/appImage/${CURSOR_ARCH}"
+CURSOR_API="https://cursor.com/api/download?platform=linux-${CURSOR_ARCH}&releaseTrack=stable"
 
 cd /tmp
+
+# Resolve download URL from API
+CURSOR_URL=$(wget -q -O - "${CURSOR_API}" | grep -oP '"downloadUrl"\s*:\s*"\K[^"]+' | head -1)
+
+if [ -z "$CURSOR_URL" ]; then
+    # Fallback to legacy direct URL
+    log "API unavailable, using fallback URL"
+    CURSOR_URL="https://downloader.cursor.sh/linux/appImage/${CURSOR_ARCH}"
+fi
+
+log "Downloading from: ${CURSOR_URL}"
 wget -q -O cursor.AppImage "${CURSOR_URL}"
+
+# Validate download size
+FILE_SIZE=$(stat -c%s cursor.AppImage 2>/dev/null || echo "0")
+if [ "$FILE_SIZE" -lt 1000000 ]; then
+    log "ERROR: Downloaded file too small (${FILE_SIZE} bytes) - likely not a valid AppImage"
+    rm -f cursor.AppImage
+    exit 1
+fi
 
 mkdir -p /opt/cursor
 mv cursor.AppImage /opt/cursor/cursor

@@ -342,8 +342,6 @@ jobs:
         exclude:
           - plugin: chrome
             arch: arm64
-          - plugin: cursor
-            arch: arm64
     runs-on: ${{ matrix.runner }}
 
     steps:
