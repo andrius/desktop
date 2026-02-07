@@ -16,6 +16,8 @@ services:
     restart: unless-stopped
     security_opt:
       - seccomp:unconfined
+    cap_add:
+      - SYS_PTRACE
     shm_size: 2gb
     ports:
       - "${VNC_PORT:-5901}:5901"

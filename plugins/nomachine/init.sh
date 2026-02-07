@@ -48,26 +48,32 @@ fi
 dpkg -i "${NOMACHINE_DEB}" || { apt-get install -f -y && dpkg -i "${NOMACHINE_DEB}"; }
 rm -f "${NOMACHINE_DEB}"
 
-# Stop NoMachine immediately — dpkg postinst starts it with default config,
-# which tries physical display :1 (owned by KasmVNC) and crashes nxnode
+# Register NoMachine libraries with the system linker — nxagent bundles its own
+# libnx*.so, libfontenc, libfreetype, libcrypto, libperl in /usr/NX/lib
+log "Registering NoMachine libraries with ldconfig..."
+cat > /etc/ld.so.conf.d/nomachine.conf << 'LDCONF'
+/usr/NX/lib
+/usr/NX/lib/perl
+LDCONF
+ldconfig
+
+# Stop NoMachine immediately — dpkg postinst starts it with default config
 log "Stopping NoMachine default services before reconfiguration..."
 /etc/NX/nxserver --shutdown 2>/dev/null || true
 
-# Configure NoMachine for virtual displays (avoid conflict with KasmVNC on :1)
-log "Configuring NoMachine for virtual displays..."
+# Configure NoMachine for physical desktop mode (free edition — shares KasmVNC display :1)
+# Virtual desktops require NoMachine Enterprise; free edition connects to the existing X display
+log "Configuring NoMachine for physical desktop mode..."
 
 SERVER_CFG="/usr/NX/etc/server.cfg"
 NODE_CFG="/usr/NX/etc/node.cfg"
 
-# Remove physical-desktop from available session types (use virtual only)
-sed -i 's/^#\?AvailableSessionTypes .*/AvailableSessionTypes unix-xsession-default unix-application unix-console/' "$SERVER_CFG"
-sed -i 's/^#\?AvailableSessionTypes .*/AvailableSessionTypes unix-xsession-default unix-application unix-console/' "$NODE_CFG"
+# Physical-desktop only (free edition limitation)
+sed -i 's/^#\?AvailableSessionTypes .*/AvailableSessionTypes physical-desktop/' "$SERVER_CFG"
+sed -i 's/^#\?AvailableSessionTypes .*/AvailableSessionTypes physical-desktop/' "$NODE_CFG"
 
-# Enable virtual display creation via nxagent
-sed -i 's/^#\?CreateDisplay .*/CreateDisplay 1/' "$SERVER_CFG"
-
-# Virtual displays start at :2 (KasmVNC uses :1)
-sed -i 's/^#\?DisplayBase .*/DisplayBase 2/' "$SERVER_CFG"
+# Disable virtual display creation (not supported in free edition)
+sed -i 's/^#\?CreateDisplay .*/CreateDisplay 0/' "$SERVER_CFG"
 
 # Ensure XFCE4 as the default desktop
 sed -i 's|^#\?DefaultDesktopCommand .*|DefaultDesktopCommand "/usr/bin/startxfce4"|' "$NODE_CFG"
@@ -75,7 +81,7 @@ sed -i 's|^#\?DefaultDesktopCommand .*|DefaultDesktopCommand "/usr/bin/startxfce
 # Start NoMachine with the corrected configuration
 log "Starting NoMachine server..."
 if /etc/NX/nxserver --startup 2>&1 | tee -a "$LOG_FILE"; then
-    log "NoMachine installed successfully (port 4000, virtual displays from :2)"
+    log "NoMachine installed successfully (port 4000, physical desktop on display :1)"
 else
     log "WARNING: NoMachine startup returned non-zero, check /usr/NX/var/log/server.log"
 fi
