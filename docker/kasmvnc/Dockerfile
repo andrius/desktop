@@ -169,8 +169,8 @@ COPY --chmod=755 plugins/ /opt/desktop/plugins/
 RUN mkdir -p /opt/desktop/plugins/.installed && \
     chown -R ${USERNAME}:${USERNAME} /opt/desktop
 
-# Set working directory
-WORKDIR /home/${USERNAME}
+# Set working directory (use /home not /home/${USERNAME} — runtime USERNAME may differ)
+WORKDIR /home
 
 # Expose ports
 # 5901: VNC port

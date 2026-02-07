@@ -32,6 +32,25 @@ if [ -n "$EXISTING_USER" ] && [ "$EXISTING_USER" != "$TARGET_USER" ]; then
     usermod -l "$TARGET_USER" -d "/home/${TARGET_USER}" -m "$EXISTING_USER" 2>/dev/null || true
     # Also update the primary group
     usermod -g "$TARGET_GID" "$TARGET_USER" 2>/dev/null || true
+
+    # Clean up stale home directory (usermod -m fails silently on volume mounts)
+    OLD_HOME="/home/${EXISTING_USER}"
+    NEW_HOME="/home/${TARGET_USER}"
+    if [ -d "$OLD_HOME" ] && [ "$OLD_HOME" != "$NEW_HOME" ]; then
+        # Copy skeleton/dot files if new home is empty
+        if [ -z "$(ls -A "$NEW_HOME" 2>/dev/null)" ]; then
+            cp -a "$OLD_HOME"/. "$NEW_HOME"/ 2>/dev/null || true
+        fi
+        rm -rf "$OLD_HOME"
+        # Fix CWD if it was the deleted directory (Dockerfile WORKDIR)
+        cd "$NEW_HOME"
+        echo "Cleaned up stale home directory: ${OLD_HOME}"
+    fi
+
+    # Clean up stale sudoers file from build-time user
+    if [ -f "/etc/sudoers.d/${EXISTING_USER}" ] && [ "$EXISTING_USER" != "$TARGET_USER" ]; then
+        rm -f "/etc/sudoers.d/${EXISTING_USER}"
+    fi
 elif [ -z "$EXISTING_USER" ]; then
     # UID does not exist — create the user
     useradd --uid "$TARGET_UID" --gid "$TARGET_GID" -m -s /bin/bash "$TARGET_USER"

@@ -48,7 +48,34 @@ fi
 dpkg -i "${NOMACHINE_DEB}" || { apt-get install -f -y && dpkg -i "${NOMACHINE_DEB}"; }
 rm -f "${NOMACHINE_DEB}"
 
-# Start NoMachine server
-/etc/NX/nxserver --startup 2>/dev/null || true
+# Stop NoMachine immediately — dpkg postinst starts it with default config,
+# which tries physical display :1 (owned by KasmVNC) and crashes nxnode
+log "Stopping NoMachine default services before reconfiguration..."
+/etc/NX/nxserver --shutdown 2>/dev/null || true
 
-log "NoMachine installed successfully (port 4000)"
+# Configure NoMachine for virtual displays (avoid conflict with KasmVNC on :1)
+log "Configuring NoMachine for virtual displays..."
+
+SERVER_CFG="/usr/NX/etc/server.cfg"
+NODE_CFG="/usr/NX/etc/node.cfg"
+
+# Remove physical-desktop from available session types (use virtual only)
+sed -i 's/^#\?AvailableSessionTypes .*/AvailableSessionTypes unix-xsession-default unix-application unix-console/' "$SERVER_CFG"
+sed -i 's/^#\?AvailableSessionTypes .*/AvailableSessionTypes unix-xsession-default unix-application unix-console/' "$NODE_CFG"
+
+# Enable virtual display creation via nxagent
+sed -i 's/^#\?CreateDisplay .*/CreateDisplay 1/' "$SERVER_CFG"
+
+# Virtual displays start at :2 (KasmVNC uses :1)
+sed -i 's/^#\?DisplayBase .*/DisplayBase 2/' "$SERVER_CFG"
+
+# Ensure XFCE4 as the default desktop
+sed -i 's|^#\?DefaultDesktopCommand .*|DefaultDesktopCommand "/usr/bin/startxfce4"|' "$NODE_CFG"
+
+# Start NoMachine with the corrected configuration
+log "Starting NoMachine server..."
+if /etc/NX/nxserver --startup 2>&1 | tee -a "$LOG_FILE"; then
+    log "NoMachine installed successfully (port 4000, virtual displays from :2)"
+else
+    log "WARNING: NoMachine startup returned non-zero, check /usr/NX/var/log/server.log"
+fi
