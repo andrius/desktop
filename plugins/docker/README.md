@@ -24,6 +24,8 @@ volumes:
   - /var/run/docker.sock:/var/run/docker.sock
 ```
 
+The plugin automatically detects the mounted socket's group ID and adjusts the container's `docker` group GID to match, so the container user can access the socket without manual configuration.
+
 ### Docker-in-Docker
 
 For full DinD, run the container with `--privileged`:
