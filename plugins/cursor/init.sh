@@ -1,5 +1,5 @@
 #!/bin/bash
-# Cursor plugin - installs Cursor AI code editor
+# Cursor plugin - installs Cursor AI code editor via .deb package
 set -e
 
 source /opt/desktop/scripts/env-setup.sh
@@ -8,14 +8,14 @@ LOG_FILE="/var/log/plugin-manager.log"
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] [cursor] $1" | tee -a "$LOG_FILE"; }
 
 # Check if already installed
-if [ -f "/opt/cursor/cursor" ] || [ -f "/usr/bin/cursor" ]; then
+if [ -f "/usr/bin/cursor" ]; then
     log "Cursor is already installed"
     exit 0
 fi
 
 log "Installing Cursor..."
 
-# Detect architecture for AppImage URL
+# Detect architecture
 ARCH=$(dpkg --print-architecture)
 case "$ARCH" in
     amd64)  CURSOR_ARCH="x64" ;;
@@ -26,50 +26,44 @@ case "$ARCH" in
         ;;
 esac
 
+# Discover latest .deb URL from official API
 CURSOR_API="https://cursor.com/api/download?platform=linux-${CURSOR_ARCH}&releaseTrack=stable"
+log "Querying API: ${CURSOR_API}"
 
-cd /tmp
+API_RESPONSE=$(wget -q -O - "${CURSOR_API}" 2>/dev/null) || {
+    log "ERROR: Failed to query Cursor API"
+    exit 1
+}
 
-# Resolve download URL from API
-CURSOR_URL=$(wget -q -O - "${CURSOR_API}" | grep -oP '"downloadUrl"\s*:\s*"\K[^"]+' | head -1)
+DEB_URL=$(echo "$API_RESPONSE" | grep -oP '"debUrl"\s*:\s*"\K[^"]+' | head -1)
+VERSION=$(echo "$API_RESPONSE" | grep -oP '"version"\s*:\s*"\K[^"]+' | head -1)
 
-if [ -z "$CURSOR_URL" ]; then
-    # Fallback to legacy direct URL
-    log "API unavailable, using fallback URL"
-    CURSOR_URL="https://downloader.cursor.sh/linux/appImage/${CURSOR_ARCH}"
-fi
-
-log "Downloading from: ${CURSOR_URL}"
-wget -q -O cursor.AppImage "${CURSOR_URL}"
-
-# Validate download size
-FILE_SIZE=$(stat -c%s cursor.AppImage 2>/dev/null || echo "0")
-if [ "$FILE_SIZE" -lt 1000000 ]; then
-    log "ERROR: Downloaded file too small (${FILE_SIZE} bytes) - likely not a valid AppImage"
-    rm -f cursor.AppImage
+if [ -z "$DEB_URL" ]; then
+    log "ERROR: Could not resolve .deb download URL from API"
     exit 1
 fi
 
-mkdir -p /opt/cursor
-mv cursor.AppImage /opt/cursor/cursor
-chmod +x /opt/cursor/cursor
+log "Downloading Cursor ${VERSION} (${ARCH}) from: ${DEB_URL}"
+cd /tmp
+wget -q -O cursor.deb "${DEB_URL}"
 
-# Create symlink
-ln -sf /opt/cursor/cursor /usr/local/bin/cursor
+# Validate download
+FILE_SIZE=$(stat -c%s cursor.deb 2>/dev/null || echo "0")
+if [ "$FILE_SIZE" -lt 1000000 ]; then
+    log "ERROR: Downloaded file too small (${FILE_SIZE} bytes)"
+    rm -f cursor.deb
+    exit 1
+fi
 
-# Create desktop shortcut
-cat > "${HOME}/Desktop/Cursor.desktop" << 'EOF'
-[Desktop Entry]
-Version=1.0
-Type=Application
-Name=Cursor
-Comment=AI-powered code editor
-Exec=/opt/cursor/cursor --no-sandbox %F
-Icon=code
-Terminal=false
-Categories=Development;IDE;
-EOF
-chmod +x "${HOME}/Desktop/Cursor.desktop"
-chown "${USERNAME}:${USERNAME}" "${HOME}/Desktop/Cursor.desktop"
+# Install .deb package (creates /usr/bin/cursor symlink and desktop entry)
+dpkg -i cursor.deb || apt-get install -f -y
+rm -f cursor.deb
 
-log "Cursor installed successfully"
+# Copy system desktop entry to user desktop
+if [ -f /usr/share/applications/cursor.desktop ]; then
+    cp /usr/share/applications/cursor.desktop "${HOME}/Desktop/Cursor.desktop"
+    chmod +x "${HOME}/Desktop/Cursor.desktop"
+    chown "${USERNAME}:${USERNAME}" "${HOME}/Desktop/Cursor.desktop"
+fi
+
+log "Cursor ${VERSION} installed successfully"

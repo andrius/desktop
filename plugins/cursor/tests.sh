@@ -6,19 +6,19 @@ ERRORS=0
 
 echo "Testing Cursor plugin..."
 
-# Test: cursor binary exists and is executable
-if [ -x /opt/cursor/cursor ]; then
-    echo "  PASS: cursor binary exists at /opt/cursor/cursor"
+# Test: cursor binary exists at dpkg install path
+if [ -x /usr/share/cursor/cursor ]; then
+    echo "  PASS: cursor binary exists at /usr/share/cursor/cursor"
 else
-    echo "  FAIL: cursor binary not found at /opt/cursor/cursor"
+    echo "  FAIL: cursor binary not found at /usr/share/cursor/cursor"
     ERRORS=$((ERRORS + 1))
 fi
 
-# Test: symlink exists
-if [ -L /usr/local/bin/cursor ]; then
-    echo "  PASS: symlink at /usr/local/bin/cursor"
+# Test: symlink exists at /usr/bin/cursor (created by dpkg postinst)
+if [ -L /usr/bin/cursor ] || [ -x /usr/bin/cursor ]; then
+    echo "  PASS: cursor available at /usr/bin/cursor"
 else
-    echo "  FAIL: symlink not found at /usr/local/bin/cursor"
+    echo "  FAIL: cursor not found at /usr/bin/cursor"
     ERRORS=$((ERRORS + 1))
 fi
 
