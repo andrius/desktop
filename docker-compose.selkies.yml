@@ -1,6 +1,8 @@
 # Docker Compose for Debian Desktop with Selkies WebRTC
 # Usage: docker compose -f docker-compose.selkies.yml up -d
 
+name: desktop
+
 services:
   desktop:
     build:
@@ -17,6 +19,8 @@ services:
     shm_size: 2gb
     ports:
       - "${SELKIES_WEB_PORT:-8080}:8080"
+      - "${XRDP_PORT:-3389}:3389"
+      - "${NOMACHINE_PORT:-4000}:4000"
     environment:
       # User configuration
       - USERNAME=${USERNAME:-user}
@@ -39,19 +43,16 @@ services:
       - SELKIES_TURN_PASSWORD=${SELKIES_TURN_PASSWORD:-}
       - SELKIES_TURN_PROTOCOL=${SELKIES_TURN_PROTOCOL:-udp}
       - FRAMERATE=${FRAMERATE:-30}
-      # Plugin configuration
-      - ENABLE_CHROME=${ENABLE_CHROME:-false}
-      - ENABLE_NOMACHINE=${ENABLE_NOMACHINE:-false}
-      - ENABLE_CURSOR=${ENABLE_CURSOR:-false}
-      - ENABLE_VSCODE=${ENABLE_VSCODE:-false}
-      - ENABLE_CLAUDE_CODE=${ENABLE_CLAUDE_CODE:-false}
-      - ENABLE_OPENCODE=${ENABLE_OPENCODE:-false}
+      # Plugin configuration (comma-separated: brew,chrome,vscode,cursor,xrdp,nomachine,claude-code,docker)
+      - PLUGINS=${PLUGINS:-}
       # Homebrew
       - HOMEBREW_NO_AUTO_UPDATE=${HOMEBREW_NO_AUTO_UPDATE:-1}
       - HOMEBREW_NO_ANALYTICS=${HOMEBREW_NO_ANALYTICS:-1}
     volumes:
       - desktop-home:/home/${USERNAME:-user}
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      # Uncomment for Docker socket passthrough (alternative to PLUGINS=docker DinD):
+      # - /var/run/docker.sock:/var/run/docker.sock
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8080/"]
       interval: 30s

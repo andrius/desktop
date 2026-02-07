@@ -40,8 +40,9 @@ ENV VNC_PORT=5901 \
 
 # RUN 1: Install all system packages + minimal desktop + KasmVNC deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    # Init system (tini only - dumb-init redundant)
+    # Init system and privilege drop
     tini \
+    gosu \
     # Locales and utilities
     locales \
     sudo \
@@ -91,10 +92,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     xfce4-terminal \
     xfconf \
     xfdesktop4 \
-    # File manager (PCManFM - lighter than Thunar)
+    # File manager (PCManFM for user-facing UI, Thunar for xfdesktop D-Bus service)
     pcmanfm \
+    thunar \
     # Desktop utilities
     dbus-x11 \
+    libglib2.0-bin \
+    gvfs \
     # Fonts (minimal)
     fonts-dejavu-core \
     fonts-liberation \
@@ -158,12 +162,13 @@ RUN sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && locale-gen en_US.UTF-8 && 
     chown -R ${USERNAME}:${USERNAME} /home/${USERNAME} && \
     chmod 700 /tmp/runtime-${USERNAME}
 
-# Copy scripts
+# Copy scripts and plugins
 COPY --chmod=755 scripts/ /opt/desktop/scripts/
 COPY --chmod=755 configs/ /opt/desktop/configs/
+COPY --chmod=755 plugins/ /opt/desktop/plugins/
 
-# Create plugin directory
-RUN mkdir -p /opt/desktop/plugins && \
+# Ensure plugin directory structure
+RUN mkdir -p /opt/desktop/plugins/.installed && \
     chown -R ${USERNAME}:${USERNAME} /opt/desktop
 
 # Set working directory

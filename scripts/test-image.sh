@@ -314,6 +314,130 @@ test_container_logs() {
     return 0
 }
 
+test_process_ownership() {
+    local expected_user="$1"
+    log_info "Checking process ownership (expecting: ${expected_user})..."
+    cd "$PROJECT_DIR"
+
+    # Get the container ID from docker compose
+    local container_id
+    container_id=$(docker compose -f "$COMPOSE_FILE" ps -q 2>/dev/null | head -1)
+    if [[ -z "$container_id" ]]; then
+        log_error "No running container found"
+        return 1
+    fi
+
+    # Check VNC server process ownership
+    local vnc_user
+    vnc_user=$(docker exec "$container_id" ps -eo user,comm --no-headers 2>/dev/null \
+        | grep -E 'Xvnc|Xkasmvnc' | awk '{print $1}' | head -1)
+
+    if [[ -z "$vnc_user" ]]; then
+        log_warn "VNC server process not found in process list"
+        log_verbose "Process list:"
+        log_verbose "$(docker exec "$container_id" ps -eo user,comm --no-headers 2>/dev/null)"
+        return 0
+    fi
+
+    if [[ "$vnc_user" == "$expected_user" ]]; then
+        log_info "VNC server running as expected user: ${vnc_user}"
+    else
+        log_error "VNC server running as '${vnc_user}', expected '${expected_user}'"
+        return 1
+    fi
+
+    # Check PulseAudio ownership
+    local pulse_user
+    pulse_user=$(docker exec "$container_id" ps -eo user,comm --no-headers 2>/dev/null \
+        | grep pulseaudio | awk '{print $1}' | head -1)
+
+    if [[ -n "$pulse_user" ]]; then
+        if [[ "$pulse_user" == "$expected_user" ]]; then
+            log_info "PulseAudio running as expected user: ${pulse_user}"
+        else
+            log_warn "PulseAudio running as '${pulse_user}', expected '${expected_user}'"
+        fi
+    fi
+
+    return 0
+}
+
+test_custom_user() {
+    log_info "Testing custom user configuration..."
+
+    local custom_container="test-custom-user-$$"
+    local custom_port=16901
+
+    # Start a container with custom user settings
+    log_info "Starting container with USERNAME=testuser, USER_UID=1234, USER_GID=1234..."
+    docker run -d \
+        --name "$custom_container" \
+        --security-opt seccomp=unconfined \
+        --shm-size=2g \
+        -p "${custom_port}:6901" \
+        -e USERNAME=testuser \
+        -e USER_UID=1234 \
+        -e USER_GID=1234 \
+        -e VNC_PW=testpass \
+        "$IMAGE_NAME" >/dev/null 2>&1
+
+    # Wait for startup
+    local elapsed=0
+    local custom_ok=false
+    while [[ $elapsed -lt $TIMEOUT_STARTUP ]]; do
+        local http_code
+        http_code=$(curl -sf -o /dev/null -w '%{http_code}' "http://localhost:${custom_port}/" 2>/dev/null || echo "000")
+        if [[ "$http_code" == "200" ]]; then
+            custom_ok=true
+            break
+        fi
+        log_verbose "Custom container HTTP: ${http_code} (elapsed: ${elapsed}s)"
+        sleep $RETRY_INTERVAL
+        elapsed=$((elapsed + RETRY_INTERVAL))
+    done
+
+    if [[ "$custom_ok" != "true" ]]; then
+        log_error "Custom user container did not become ready"
+        docker logs "$custom_container" 2>&1 | tail -20
+        docker rm -f "$custom_container" >/dev/null 2>&1 || true
+        return 1
+    fi
+
+    log_info "Custom user container is responding on port ${custom_port}"
+
+    # Verify VNC runs as testuser
+    local vnc_user
+    vnc_user=$(docker exec "$custom_container" ps -eo user,comm --no-headers 2>/dev/null \
+        | grep -E 'Xvnc|Xkasmvnc' | awk '{print $1}' | head -1)
+
+    if [[ "$vnc_user" == "testuser" ]]; then
+        log_info "VNC server running as custom user: ${vnc_user}"
+    elif [[ -z "$vnc_user" ]]; then
+        log_warn "VNC server process not found in custom container"
+    else
+        log_error "VNC server running as '${vnc_user}', expected 'testuser'"
+        docker rm -f "$custom_container" >/dev/null 2>&1 || true
+        return 1
+    fi
+
+    # Verify uid
+    local actual_uid
+    actual_uid=$(docker exec "$custom_container" id -u testuser 2>/dev/null || echo "")
+
+    if [[ "$actual_uid" == "1234" ]]; then
+        log_info "Custom user UID verified: ${actual_uid}"
+    else
+        log_error "Custom user UID is '${actual_uid}', expected '1234'"
+        docker rm -f "$custom_container" >/dev/null 2>&1 || true
+        return 1
+    fi
+
+    # Cleanup custom container
+    docker rm -f "$custom_container" >/dev/null 2>&1 || true
+    log_info "Custom user test passed"
+    return 0
+}
+
 # Run all tests
 run_tests() {
     local failed=0
@@ -366,6 +490,20 @@ run_tests() {
     if [[ $failed -eq 0 ]]; then
         # Test 6: Log analysis
         if ! test_container_logs; then
+            failed=1
+        fi
+    fi
+
+    if [[ $failed -eq 0 ]]; then
+        # Test 7: Process ownership (default user)
+        if ! test_process_ownership "user"; then
+            failed=1
+        fi
+    fi
+
+    if [[ $failed -eq 0 && "$VARIANT" == "kasmvnc" ]]; then
+        # Test 8: Custom user configuration
+        if ! test_custom_user; then
             failed=1
         fi
     fi

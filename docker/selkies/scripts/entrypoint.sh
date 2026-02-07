@@ -21,9 +21,20 @@ if [ ! -d "$XDG_RUNTIME_DIR" ]; then
     chmod 700 "$XDG_RUNTIME_DIR"
 fi
 
-# Install plugins if configured
-if [ -f "/opt/desktop/scripts/plugin-manager.sh" ]; then
-    /opt/desktop/scripts/plugin-manager.sh install
+# Update plugins from remote on first boot
+if [ ! -f "/opt/desktop/plugins/.updated" ] && [ -n "${PLUGINS:-}" ]; then
+    /opt/desktop/scripts/plugin-manager.sh update || true
+    touch /opt/desktop/plugins/.updated
+fi
+
+# Install configured plugins
+/opt/desktop/scripts/plugin-manager.sh install
+
+# Start system services installed by plugins
+[ -x /etc/init.d/xrdp ] && /etc/init.d/xrdp start 2>/dev/null || true
+[ -x /etc/NX/nxserver ] && /etc/NX/nxserver --startup 2>/dev/null || true
+if command -v dockerd &>/dev/null && [ ! -S /var/run/docker.sock ]; then
+    dockerd &>/dev/null &
 fi
 
 # Configure display

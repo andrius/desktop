@@ -49,10 +49,16 @@ prepare_contexts() {
     cp docker/base/scripts/env-setup.sh docker/kasmvnc/scripts/
     cp docker/base/scripts/init-user.sh docker/kasmvnc/scripts/
     cp docker/base/scripts/plugin-manager.sh docker/kasmvnc/scripts/
+    cp docker/base/scripts/setup-user.sh docker/kasmvnc/scripts/
+    rm -rf docker/kasmvnc/plugins/
+    cp -r plugins/ docker/kasmvnc/plugins/
 
     cp docker/base/scripts/env-setup.sh docker/selkies/scripts/
     cp docker/base/scripts/init-user.sh docker/selkies/scripts/
     cp docker/base/scripts/plugin-manager.sh docker/selkies/scripts/
+    cp docker/base/scripts/setup-user.sh docker/selkies/scripts/
+    rm -rf docker/selkies/plugins/
+    cp -r plugins/ docker/selkies/plugins/
 
     log_success "Build contexts prepared"
 }

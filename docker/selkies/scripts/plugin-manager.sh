@@ -1,225 +1,106 @@
 #!/bin/bash
 # Plugin Manager for Debian Desktop Docker
-# Handles installation of optional software based on .env configuration
+# Directory-based plugin system: each plugin is a folder with init.sh, tests.sh, README.md
 set -e
 
-PLUGIN_DIR="/opt/desktop/plugins"
+PLUGIN_BASE_DIR="/opt/desktop/plugins"
+MARKER_DIR="${PLUGIN_BASE_DIR}/.installed"
 LOG_FILE="/var/log/plugin-manager.log"
+REPO_URL="https://github.com/andrius/desktop.git"
 
 # Source environment
 source /opt/desktop/scripts/env-setup.sh
 
 log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | sudo tee -a "$LOG_FILE"
+    local msg="[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+    echo "$msg" | tee -a "$LOG_FILE" 2>/dev/null || echo "$msg"
 }
 
-# Plugin installation functions
-install_chrome() {
-    log "Installing Google Chrome Stable..."
+# Backward compatibility: convert ENABLE_* vars to PLUGINS list with deprecation warning
+compat_enable_vars() {
+    local compat_plugins=""
+    local found_legacy=false
 
-    if command -v google-chrome-stable &> /dev/null; then
-        log "Google Chrome is already installed"
-        return 0
-    fi
+    declare -A legacy_map=(
+        [ENABLE_CHROME]="chrome"
+        [ENABLE_NOMACHINE]="nomachine"
+        [ENABLE_CURSOR]="cursor"
+        [ENABLE_VSCODE]="vscode"
+        [ENABLE_CLAUDE_CODE]="claude-code"
+        [ENABLE_OPENCODE]="opencode"
+        [ENABLE_XRDP]="xrdp"
+        [ENABLE_DOCKER]="docker"
+        [ENABLE_BREW]="brew"
+    )
 
-    # Add Google Chrome repository
-    wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg
-    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
-
-    sudo apt-get update
-    sudo apt-get install -y google-chrome-stable
-
-    # Create desktop shortcut
-    cat > "${HOME}/Desktop/Chrome.desktop" << 'EOF'
-[Desktop Entry]
-Version=1.0
-Type=Application
-Name=Google Chrome
-Comment=Access the Internet
-Exec=/usr/bin/google-chrome-stable --no-sandbox %U
-Icon=google-chrome
-Terminal=false
-Categories=Network;WebBrowser;
-EOF
-    chmod +x "${HOME}/Desktop/Chrome.desktop"
-
-    log "Google Chrome installed successfully"
-}
-
-install_nomachine() {
-    log "Installing NoMachine Server..."
-
-    if command -v nxserver &> /dev/null; then
-        log "NoMachine is already installed"
-        return 0
-    fi
-
-    # Download and install NoMachine
-    NOMACHINE_VERSION="8.14.2"
-    NOMACHINE_BUILD="1"
-    NOMACHINE_DEB="nomachine_${NOMACHINE_VERSION}_${NOMACHINE_BUILD}_amd64.deb"
-
-    cd /tmp
-    wget -q "https://download.nomachine.com/download/8.14/Linux/${NOMACHINE_DEB}"
-    sudo dpkg -i "${NOMACHINE_DEB}" || sudo apt-get install -f -y
-    rm -f "${NOMACHINE_DEB}"
-
-    log "NoMachine installed successfully"
-}
-
-install_cursor() {
-    log "Installing Cursor Editor..."
-
-    if [ -f "/opt/cursor/cursor" ] || [ -f "/usr/bin/cursor" ]; then
-        log "Cursor is already installed"
-        return 0
-    fi
-
-    # Download latest Cursor AppImage
-    cd /tmp
-    CURSOR_URL="https://downloader.cursor.sh/linux/appImage/x64"
-    wget -q -O cursor.AppImage "${CURSOR_URL}"
-
-    # Install Cursor
-    sudo mkdir -p /opt/cursor
-    sudo mv cursor.AppImage /opt/cursor/cursor
-    sudo chmod +x /opt/cursor/cursor
-
-    # Create symlink
-    sudo ln -sf /opt/cursor/cursor /usr/local/bin/cursor
-
-    # Create desktop shortcut
-    cat > "${HOME}/Desktop/Cursor.desktop" << 'EOF'
-[Desktop Entry]
-Version=1.0
-Type=Application
-Name=Cursor
-Comment=AI-powered code editor
-Exec=/opt/cursor/cursor --no-sandbox %F
-Icon=code
-Terminal=false
-Categories=Development;IDE;
-EOF
-    chmod +x "${HOME}/Desktop/Cursor.desktop"
-
-    log "Cursor installed successfully"
-}
-
-install_vscode() {
-    log "Installing Visual Studio Code..."
-
-    if command -v code &> /dev/null; then
-        log "VS Code is already installed"
-        return 0
-    fi
-
-    # Add Microsoft repository
-    wget -qO- https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > /tmp/packages.microsoft.gpg
-    sudo install -D -o root -g root -m 644 /tmp/packages.microsoft.gpg /usr/share/keyrings/packages.microsoft.gpg
-    sudo sh -c 'echo "deb [arch=amd64,arm64,armhf signed-by=/usr/share/keyrings/packages.microsoft.gpg] https://packages.microsoft.com/repos/code stable main" > /etc/apt/sources.list.d/vscode.list'
-    rm -f /tmp/packages.microsoft.gpg
-
-    sudo apt-get update
-    sudo apt-get install -y code
-
-    # Create desktop shortcut
-    cat > "${HOME}/Desktop/VSCode.desktop" << 'EOF'
-[Desktop Entry]
-Version=1.0
-Type=Application
-Name=Visual Studio Code
-Comment=Code editing, redefined
-Exec=/usr/bin/code --no-sandbox %F
-Icon=vscode
-Terminal=false
-Categories=Development;IDE;
-EOF
-    chmod +x "${HOME}/Desktop/VSCode.desktop"
-
-    log "VS Code installed successfully"
-}
-
-install_claude_code() {
-    log "Installing Claude Code..."
-
-    if command -v claude &> /dev/null; then
-        log "Claude Code is already installed"
-        return 0
-    fi
-
-    # Install via npm (requires Node.js)
-    if ! command -v node &> /dev/null; then
-        log "Installing Node.js first..."
-        # Install Node.js via Homebrew
-        if command -v brew &> /dev/null; then
-            brew install node
-        else
-            # Fallback: install from NodeSource
-            curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-            sudo apt-get install -y nodejs
+    for var in "${!legacy_map[@]}"; do
+        if [ "${!var}" = "true" ]; then
+            found_legacy=true
+            if [ -n "$compat_plugins" ]; then
+                compat_plugins="${compat_plugins},${legacy_map[$var]}"
+            else
+                compat_plugins="${legacy_map[$var]}"
+            fi
         fi
+    done
+
+    if [ "$found_legacy" = true ]; then
+        log "DEPRECATION WARNING: ENABLE_* variables are deprecated. Use PLUGINS=${compat_plugins} instead."
+        if [ -n "$PLUGINS" ]; then
+            PLUGINS="${PLUGINS},${compat_plugins}"
+        else
+            PLUGINS="$compat_plugins"
+        fi
+        export PLUGINS
     fi
-
-    # Install Claude Code globally
-    sudo npm install -g @anthropic-ai/claude-code
-
-    log "Claude Code installed successfully"
 }
 
-install_opencode() {
-    log "Installing OpenCode..."
+# Install a single plugin by name
+install_plugin() {
+    local name="$1"
+    local init_script="${PLUGIN_BASE_DIR}/${name}/init.sh"
+    local marker="${MARKER_DIR}/${name}"
 
-    if command -v opencode &> /dev/null; then
-        log "OpenCode is already installed"
+    if [ ! -f "$init_script" ]; then
+        log "ERROR: Plugin '${name}' not found at ${init_script}"
+        return 1
+    fi
+
+    if [ -f "$marker" ]; then
+        log "Plugin '${name}' already installed (marker exists), skipping"
         return 0
     fi
 
-    # Install OpenCode via go install or download binary
-    if command -v brew &> /dev/null; then
-        brew install opencode
+    log "Installing plugin: ${name}"
+    if bash -e "$init_script" 2>&1 | tee -a "$LOG_FILE"; then
+        mkdir -p "$MARKER_DIR"
+        touch "$marker"
+        log "Plugin '${name}' installed successfully"
+        return 0
     else
-        # Download from GitHub releases
-        cd /tmp
-        OPENCODE_VERSION="latest"
-        wget -q -O opencode.tar.gz "https://github.com/opencode-ai/opencode/releases/latest/download/opencode_Linux_x86_64.tar.gz" || {
-            log "Failed to download OpenCode"
-            return 1
-        }
-        tar -xzf opencode.tar.gz
-        sudo mv opencode /usr/local/bin/
-        rm -f opencode.tar.gz
+        log "ERROR: Plugin '${name}' installation failed"
+        return 1
     fi
-
-    log "OpenCode installed successfully"
 }
 
-# Main installation logic
+# Install all plugins from PLUGINS env var
 install_plugins() {
-    log "Starting plugin installation..."
+    compat_enable_vars
 
-    if [ "$ENABLE_CHROME" = "true" ]; then
-        install_chrome || log "Failed to install Chrome"
+    if [ -z "${PLUGINS:-}" ]; then
+        log "No plugins configured (PLUGINS is empty)"
+        return 0
     fi
 
-    if [ "$ENABLE_NOMACHINE" = "true" ]; then
-        install_nomachine || log "Failed to install NoMachine"
-    fi
+    log "Starting plugin installation for: ${PLUGINS}"
+    mkdir -p "$MARKER_DIR"
 
-    if [ "$ENABLE_CURSOR" = "true" ]; then
-        install_cursor || log "Failed to install Cursor"
-    fi
-
-    if [ "$ENABLE_VSCODE" = "true" ]; then
-        install_vscode || log "Failed to install VS Code"
-    fi
-
-    if [ "$ENABLE_CLAUDE_CODE" = "true" ]; then
-        install_claude_code || log "Failed to install Claude Code"
-    fi
-
-    if [ "$ENABLE_OPENCODE" = "true" ]; then
-        install_opencode || log "Failed to install OpenCode"
-    fi
+    local IFS=','
+    for plugin in $PLUGINS; do
+        plugin=$(echo "$plugin" | xargs)  # trim whitespace
+        [ -z "$plugin" ] && continue
+        install_plugin "$plugin" || log "WARNING: Plugin '${plugin}' failed, continuing..."
+    done
 
     log "Plugin installation completed"
 }
@@ -227,20 +108,70 @@ install_plugins() {
 # List available plugins
 list_plugins() {
     echo "Available plugins:"
-    echo "  - chrome      : Google Chrome browser"
-    echo "  - nomachine   : NoMachine remote desktop server"
-    echo "  - cursor      : Cursor AI code editor"
-    echo "  - vscode      : Visual Studio Code"
-    echo "  - claude-code : Anthropic's Claude Code CLI"
-    echo "  - opencode    : OpenCode CLI tool"
     echo ""
-    echo "Enable plugins by setting environment variables:"
-    echo "  ENABLE_CHROME=true"
-    echo "  ENABLE_NOMACHINE=true"
-    echo "  ENABLE_CURSOR=true"
-    echo "  ENABLE_VSCODE=true"
-    echo "  ENABLE_CLAUDE_CODE=true"
-    echo "  ENABLE_OPENCODE=true"
+
+    if [ ! -d "$PLUGIN_BASE_DIR" ]; then
+        echo "  (no plugin directory found)"
+        return 0
+    fi
+
+    for dir in "$PLUGIN_BASE_DIR"/*/; do
+        [ -d "$dir" ] || continue
+        local name
+        name=$(basename "$dir")
+        [ "$name" = ".installed" ] && continue
+
+        local status="available"
+        if [ -f "${MARKER_DIR}/${name}" ]; then
+            status="installed"
+        fi
+
+        local desc=""
+        if [ -f "${dir}/README.md" ]; then
+            desc=$(head -1 "${dir}/README.md" | sed 's/^#\+\s*//')
+        fi
+
+        printf "  %-15s [%s] %s\n" "$name" "$status" "$desc"
+    done
+
+    echo ""
+    echo "Configure plugins: PLUGINS=brew,vscode,cursor (comma-separated)"
+}
+
+# Run tests for a plugin
+test_plugin() {
+    local name="$1"
+    local test_script="${PLUGIN_BASE_DIR}/${name}/tests.sh"
+
+    if [ ! -f "$test_script" ]; then
+        echo "No tests found for plugin '${name}'"
+        return 1
+    fi
+
+    echo "Running tests for plugin: ${name}"
+    bash -e "$test_script"
+}
+
+# Update plugins from remote repository via sparse-checkout
+update_plugins() {
+    log "Updating plugins from ${REPO_URL}..."
+
+    local tmpdir="/tmp/plugin-update-$$"
+    if git clone --depth 1 --filter=blob:none --sparse "$REPO_URL" "$tmpdir" 2>&1 | tee -a "$LOG_FILE"; then
+        cd "$tmpdir"
+        git sparse-checkout set plugins/ 2>&1 | tee -a "$LOG_FILE"
+        if [ -d "plugins" ] && [ "$(ls -A plugins/)" ]; then
+            cp -r plugins/* "$PLUGIN_BASE_DIR/"
+            log "Plugins updated successfully"
+        else
+            log "WARNING: No plugins found in remote repository"
+        fi
+        rm -rf "$tmpdir"
+    else
+        log "WARNING: Failed to update plugins from remote (continuing with bundled plugins)"
+        rm -rf "$tmpdir"
+        return 1
+    fi
 }
 
 # Command dispatcher
@@ -251,26 +182,23 @@ case "${1:-install}" in
     list)
         list_plugins
         ;;
-    chrome)
-        install_chrome
+    test)
+        if [ -z "${2:-}" ]; then
+            echo "Usage: $0 test <plugin-name>"
+            exit 1
+        fi
+        test_plugin "$2"
         ;;
-    nomachine)
-        install_nomachine
-        ;;
-    cursor)
-        install_cursor
-        ;;
-    vscode)
-        install_vscode
-        ;;
-    claude-code)
-        install_claude_code
-        ;;
-    opencode)
-        install_opencode
+    update)
+        update_plugins
         ;;
     *)
-        echo "Usage: $0 {install|list|chrome|nomachine|cursor|vscode|claude-code|opencode}"
-        exit 1
+        # Try as a direct plugin name for backward compat
+        if [ -f "${PLUGIN_BASE_DIR}/$1/init.sh" ]; then
+            install_plugin "$1"
+        else
+            echo "Usage: $0 {install|list|test <name>|update|<plugin-name>}"
+            exit 1
+        fi
         ;;
 esac

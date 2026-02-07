@@ -1,134 +1,176 @@
-# Plugin System Documentation
+# Plugin System
 
-The Debian Docker Desktop includes a flexible plugin system for installing optional software. Plugins can be enabled via environment variables or installed manually.
+The Debian Docker Desktop uses a directory-based plugin system for installing optional software. Each plugin is a self-contained folder with an install script, tests, and documentation.
+
+## Quick Start
+
+Set the `PLUGINS` environment variable to a comma-separated list of plugins:
+
+```bash
+# .env
+PLUGINS=brew,vscode,cursor
+```
+
+Plugins install automatically on first container start and are skipped on restart.
 
 ## Available Plugins
 
-### Google Chrome
+| Plugin | Description | Port | Arch |
+|--------|-------------|------|------|
+| `brew` | Homebrew package manager | - | all |
+| `chrome` | Google Chrome browser | - | amd64 |
+| `xrdp` | XRDP remote desktop server | 3389 | all |
+| `nomachine` | NoMachine remote desktop server | 4000 | all |
+| `cursor` | Cursor AI code editor | - | amd64 |
+| `vscode` | Visual Studio Code | - | all |
+| `claude-code` | Claude Code CLI | - | all |
+| `docker` | Docker Engine (DinD) | - | all |
 
-**Description**: Google Chrome stable browser
-**Enable**: `ENABLE_CHROME=true`
-**Manual Install**: `/opt/desktop/scripts/plugin-manager.sh chrome`
-
-Chrome is installed from Google's official APT repository and creates a desktop shortcut.
-
-### NoMachine
-
-**Description**: NoMachine remote desktop server
-**Enable**: `ENABLE_NOMACHINE=true`
-**Manual Install**: `/opt/desktop/scripts/plugin-manager.sh nomachine`
-
-NoMachine provides an alternative remote desktop solution with:
-- NX protocol for efficient remote access
-- Audio support
-- File transfer
-- Multi-monitor support
-
-**Note**: NoMachine runs alongside the VNC server and uses port 4000.
-
-### Cursor
-
-**Description**: AI-powered code editor based on VS Code
-**Enable**: `ENABLE_CURSOR=true`
-**Manual Install**: `/opt/desktop/scripts/plugin-manager.sh cursor`
-
-Cursor is installed as an AppImage to `/opt/cursor/cursor`.
-
-### Visual Studio Code
-
-**Description**: Microsoft Visual Studio Code editor
-**Enable**: `ENABLE_VSCODE=true`
-**Manual Install**: `/opt/desktop/scripts/plugin-manager.sh vscode`
-
-VS Code is installed from Microsoft's official APT repository.
-
-### Claude Code
-
-**Description**: Anthropic's Claude Code CLI tool
-**Enable**: `ENABLE_CLAUDE_CODE=true`
-**Manual Install**: `/opt/desktop/scripts/plugin-manager.sh claude-code`
-
-Claude Code requires Node.js, which will be installed automatically if not present.
-
-**Prerequisites**: Node.js (installed automatically)
-
-### OpenCode
-
-**Description**: OpenCode CLI tool
-**Enable**: `ENABLE_OPENCODE=true`
-**Manual Install**: `/opt/desktop/scripts/plugin-manager.sh opencode`
-
-OpenCode is installed from GitHub releases.
-
-## Configuration
+## Plugin Configuration
 
 ### Via Environment Variables
 
-Add plugin configuration to your `.env` file:
-
 ```bash
-# Enable plugins
-ENABLE_CHROME=true
-ENABLE_VSCODE=true
-ENABLE_CURSOR=true
-ENABLE_CLAUDE_CODE=true
-ENABLE_OPENCODE=true
-ENABLE_NOMACHINE=true
-```
+# .env
+PLUGINS=brew,chrome,vscode,xrdp
 
-Plugins are installed during container startup when their environment variables are set to `true`.
+# Plugin-specific ports
+XRDP_PORT=3389
+NOMACHINE_PORT=4000
+```
 
 ### Manual Installation
 
-Plugins can be installed manually after the container is running:
+Install plugins inside a running container:
 
 ```bash
-# Enter the container
-docker exec -it debian-desktop-kasmvnc bash
-
 # List available plugins
 /opt/desktop/scripts/plugin-manager.sh list
 
-# Install specific plugins
-/opt/desktop/scripts/plugin-manager.sh chrome
+# Install a specific plugin
 /opt/desktop/scripts/plugin-manager.sh vscode
-/opt/desktop/scripts/plugin-manager.sh cursor
-/opt/desktop/scripts/plugin-manager.sh claude-code
-/opt/desktop/scripts/plugin-manager.sh opencode
-/opt/desktop/scripts/plugin-manager.sh nomachine
+
+# Install all configured plugins
+/opt/desktop/scripts/plugin-manager.sh install
 ```
 
-## Plugin Installation Logs
+### Plugin Ordering
 
-Plugin installation logs are stored at `/var/log/plugin-manager.log`:
+Plugins install in the order listed. Some have dependencies:
 
 ```bash
-# View plugin installation logs
-cat /var/log/plugin-manager.log
+# claude-code needs Node.js; brew can provide it
+PLUGINS=brew,claude-code
+```
 
-# Follow logs in real-time
-tail -f /var/log/plugin-manager.log
+## Remote Access & Port Forwarding
+
+The desktop can be accessed via multiple methods. Built-in methods (KasmVNC, Selkies) are always available; plugin methods require the corresponding plugin.
+
+| Method | Protocol | Port | Plugin | Notes |
+|--------|----------|------|--------|-------|
+| KasmVNC | HTTP/WebSocket | 6901 | built-in | Web browser access, file transfer, audio |
+| Selkies | WebRTC | 8080 | built-in | Low latency, may need TURN server for NAT |
+| XRDP | RDP/TCP | 3389 | `xrdp` | Standard RDP clients (mstsc, Remmina, FreeRDP) |
+| NoMachine | NX/TCP+UDP | 4000 | `nomachine` | NoMachine client required |
+
+### Port Forwarding in Compose Files
+
+KasmVNC and Selkies ports are always exposed. XRDP and NoMachine ports are pre-configured in the compose files so they're ready when the plugins are enabled:
+
+```yaml
+# docker-compose.kasmvnc.yml / docker-compose.selkies.yml
+ports:
+  - "${XRDP_PORT:-3389}:3389"
+  - "${NOMACHINE_PORT:-4000}:4000"
+```
+
+### Docker Socket Passthrough
+
+The `docker` plugin runs Docker-in-Docker by default. Alternatively, mount the host Docker socket:
+
+```yaml
+volumes:
+  - /var/run/docker.sock:/var/run/docker.sock
+```
+
+## Plugin Directory Structure
+
+Each plugin lives at `plugins/<name>/`:
+
+```
+plugins/
+├── brew/
+│   ├── init.sh       # Installation script
+│   ├── tests.sh      # Automated tests
+│   └── README.md     # Documentation
+├── chrome/
+├── claude-code/
+├── cursor/
+├── docker/
+├── nomachine/
+├── vscode/
+├── xrdp/
+└── ...
+```
+
+### Plugin Lifecycle
+
+1. `entrypoint.sh` reads `PLUGINS` env var
+2. For each plugin, `plugin-manager.sh` checks for a marker file at `/opt/desktop/plugins/.installed/<name>`
+3. If no marker, runs `plugins/<name>/init.sh`
+4. On success, creates the marker file (skips on next boot)
+5. On failure, logs the error and continues to next plugin
+
+## Remote Plugin Updates
+
+On first boot (when `PLUGINS` is set), the plugin manager can fetch updated plugins from the repository via sparse-checkout:
+
+```bash
+# Manual update
+/opt/desktop/scripts/plugin-manager.sh update
 ```
 
 ## Creating Custom Plugins
 
-You can extend the plugin system by adding new installation functions to `/opt/desktop/scripts/plugin-manager.sh`:
+### Contract
+
+`init.sh` must follow these rules:
+
+- **Runs as root** (before `gosu` in entrypoint)
+- **Environment available**: `USERNAME`, `HOME`, `DISPLAY` (from `env-setup.sh`)
+- **Must be idempotent** — check if already installed, skip if so
+- **Desktop shortcuts** go in `$HOME/Desktop/`, `chown` to user
+- **Logs** to `/var/log/plugin-manager.log`
+- **Exit 0** on success, non-zero on failure (non-fatal to container)
+
+### Example Plugin
 
 ```bash
-install_myapp() {
-    log "Installing MyApp..."
+#!/bin/bash
+# plugins/myapp/init.sh
+set -e
 
-    # Check if already installed
-    if command -v myapp &> /dev/null; then
-        log "MyApp is already installed"
-        return 0
-    fi
+source /opt/desktop/scripts/env-setup.sh
 
-    # Installation steps
-    # ...
+LOG_FILE="/var/log/plugin-manager.log"
+log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] [myapp] $1" | tee -a "$LOG_FILE"; }
 
-    # Create desktop shortcut (optional)
-    cat > "${HOME}/Desktop/MyApp.desktop" << 'EOF'
+# Idempotency check
+if command -v myapp &>/dev/null; then
+    log "MyApp is already installed"
+    exit 0
+fi
+
+log "Installing MyApp..."
+
+# Installation logic here
+apt-get update
+apt-get install -y myapp
+rm -rf /var/lib/apt/lists/*
+
+# Desktop shortcut
+cat > "${HOME}/Desktop/MyApp.desktop" << 'EOF'
 [Desktop Entry]
 Version=1.0
 Type=Application
@@ -136,75 +178,65 @@ Name=MyApp
 Exec=/usr/bin/myapp
 Icon=myapp
 Terminal=false
-Categories=Utility;
 EOF
-    chmod +x "${HOME}/Desktop/MyApp.desktop"
+chmod +x "${HOME}/Desktop/MyApp.desktop"
+chown "${USERNAME}:${USERNAME}" "${HOME}/Desktop/MyApp.desktop"
 
-    log "MyApp installed successfully"
-}
+log "MyApp installed successfully"
 ```
 
-Then add the plugin to the command dispatcher:
+### Testing
 
 ```bash
-case "${1:-install}" in
-    # ... existing cases ...
-    myapp)
-        install_myapp
-        ;;
-esac
+# Test a specific plugin
+/opt/desktop/scripts/plugin-manager.sh test myapp
+
+# Test plugins in isolated containers
+./scripts/test-plugins.sh myapp --verbose
 ```
+
+## Backward Compatibility
+
+The old `ENABLE_*` environment variables still work but are deprecated:
+
+```bash
+# Old style (deprecated)
+ENABLE_VSCODE=true
+ENABLE_XRDP=true
+
+# New style
+PLUGINS=vscode,xrdp
+```
+
+When `ENABLE_*` variables are detected, the plugin manager converts them to the `PLUGINS` list and logs a deprecation warning.
 
 ## Troubleshooting
 
 ### Plugin installation fails
 
-1. Check network connectivity:
-   ```bash
-   ping -c 1 google.com
-   ```
+1. Check logs: `cat /var/log/plugin-manager.log`
+2. Check network: `ping -c 1 google.com`
+3. Check disk space: `df -h /`
 
-2. Check available disk space:
-   ```bash
-   df -h /
-   ```
+### Plugin installs every restart
 
-3. View detailed logs:
-   ```bash
-   cat /var/log/plugin-manager.log
-   ```
+The marker file at `/opt/desktop/plugins/.installed/<name>` may be missing. This happens if the plugins directory is on a non-persistent volume.
 
-### Plugin not starting
+### Force reinstall
 
-1. Check if the application is installed:
-   ```bash
-   which chrome  # or vscode, cursor, etc.
-   ```
+Remove the marker file and restart:
 
-2. Try running from terminal to see error messages:
-   ```bash
-   google-chrome-stable --no-sandbox
-   code --no-sandbox
-   ```
+```bash
+rm /opt/desktop/plugins/.installed/vscode
+/opt/desktop/scripts/plugin-manager.sh install
+```
 
-3. Check for missing dependencies:
-   ```bash
-   ldd /path/to/application | grep "not found"
-   ```
+## Plugin Installation Logs
 
-### Desktop shortcuts not working
+```bash
+# View all logs
+cat /var/log/plugin-manager.log
 
-1. Verify the shortcut file exists:
-   ```bash
-   ls -la ~/Desktop/
-   ```
-
-2. Check shortcut permissions:
-   ```bash
-   chmod +x ~/Desktop/MyApp.desktop
-   ```
-
-3. Verify the shortcut configuration:
-   ```bash
-   cat ~/Desktop/MyApp.desktop
-   ```
+# Follow in real-time
+tail -f /var/log/plugin-manager.log
+```

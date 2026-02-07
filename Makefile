@@ -1,5 +1,5 @@
 # Makefile for Debian Docker Desktop
-.PHONY: all build build-kasmvnc build-selkies clean prepare help
+.PHONY: all build build-kasmvnc build-selkies clean prepare help test-plugins
 
 # Default configuration
 USERNAME ?= user
@@ -37,9 +37,15 @@ prepare:
 	@cp docker/base/scripts/env-setup.sh docker/kasmvnc/scripts/
 	@cp docker/base/scripts/init-user.sh docker/kasmvnc/scripts/
 	@cp docker/base/scripts/plugin-manager.sh docker/kasmvnc/scripts/
+	@cp docker/base/scripts/setup-user.sh docker/kasmvnc/scripts/
+	@rm -rf docker/kasmvnc/plugins/
+	@cp -r plugins/ docker/kasmvnc/plugins/
 	@cp docker/base/scripts/env-setup.sh docker/selkies/scripts/
 	@cp docker/base/scripts/init-user.sh docker/selkies/scripts/
 	@cp docker/base/scripts/plugin-manager.sh docker/selkies/scripts/
+	@cp docker/base/scripts/setup-user.sh docker/selkies/scripts/
+	@rm -rf docker/selkies/plugins/
+	@cp -r plugins/ docker/selkies/plugins/
 	@echo "Build contexts prepared."
 
 build: build-kasmvnc build-selkies
@@ -95,3 +101,7 @@ shell-kasmvnc:
 
 shell-selkies:
 	docker compose -f docker-compose.selkies.yml exec desktop bash
+
+test-plugins:
+	@chmod +x scripts/test-plugins.sh
+	@./scripts/test-plugins.sh $(ARGS)

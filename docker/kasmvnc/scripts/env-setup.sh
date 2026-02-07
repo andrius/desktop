@@ -27,13 +27,8 @@ if [ -d "$HOMEBREW_PREFIX" ]; then
     export PATH="${HOMEBREW_PREFIX}/bin:${HOMEBREW_PREFIX}/sbin:${PATH}"
 fi
 
-# Plugin configuration (from .env)
-export ENABLE_CHROME="${ENABLE_CHROME:-false}"
-export ENABLE_NOMACHINE="${ENABLE_NOMACHINE:-false}"
-export ENABLE_CURSOR="${ENABLE_CURSOR:-false}"
-export ENABLE_VSCODE="${ENABLE_VSCODE:-false}"
-export ENABLE_CLAUDE_CODE="${ENABLE_CLAUDE_CODE:-false}"
-export ENABLE_OPENCODE="${ENABLE_OPENCODE:-false}"
+# Plugin configuration (comma-separated list, e.g. PLUGINS=brew,vscode,cursor)
+export PLUGINS="${PLUGINS:-}"
 
 # VNC configuration
 export VNC_PORT="${VNC_PORT:-5900}"

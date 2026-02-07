@@ -7,6 +7,16 @@ HOME="/home/${USERNAME}"
 
 echo "Initializing user environment for: ${USERNAME}"
 
+# Detect installed file manager for desktop shortcut
+if command -v pcmanfm >/dev/null 2>&1; then
+    FILE_MANAGER="pcmanfm"
+elif command -v thunar >/dev/null 2>&1; then
+    FILE_MANAGER="thunar"
+else
+    FILE_MANAGER="xdg-open"
+fi
+echo "Detected file manager: ${FILE_MANAGER}"
+
 # Ensure user directories exist
 mkdir -p "${HOME}/.config/xfce4" \
          "${HOME}/.local/share" \
@@ -29,6 +39,9 @@ if [ ! -f "${HOME}/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-session.xml" ]
     mkdir -p "${HOME}/.config/xfce4/xfconf/xfce-perchannel-xml"
 
     # Create basic XFCE4 session configuration
+    # Note: Client2 must be Thunar --daemon because xfdesktop depends on
+    # Thunar's D-Bus service (org.xfce.FileManager) to launch .desktop files.
+    # The user-facing file manager (Exec= in .desktop shortcut) can differ.
     cat > "${HOME}/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-session.xml" << 'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <channel name="xfce4-session" version="1.0">
@@ -109,6 +122,73 @@ if [ ! -f "${HOME}/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-panel.xml" ]; 
 EOF
 fi
 
+# Set up xsettings (GTK + icon theme: Adwaita-dark)
+if [ ! -f "${HOME}/.config/xfce4/xfconf/xfce-perchannel-xml/xsettings.xml" ]; then
+    cat > "${HOME}/.config/xfce4/xfconf/xfce-perchannel-xml/xsettings.xml" << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xsettings" version="1.0">
+  <property name="Net" type="empty">
+    <property name="ThemeName" type="string" value="Adwaita-dark"/>
+    <property name="IconThemeName" type="string" value="Adwaita"/>
+  </property>
+  <property name="Gtk" type="empty">
+    <property name="CursorThemeName" type="string" value="Adwaita"/>
+  </property>
+</channel>
+EOF
+fi
+
+# Set up desktop background (solid space gray #3d3d3d)
+if [ ! -f "${HOME}/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml" ]; then
+    cat > "${HOME}/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml" << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfce4-desktop" version="1.0">
+  <property name="backdrop" type="empty">
+    <property name="screen0" type="empty">
+      <property name="monitorscreen" type="empty">
+        <property name="workspace0" type="empty">
+          <property name="color-style" type="int" value="0"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="rgba1" type="array">
+            <value type="double" value="0.23921568627"/>
+            <value type="double" value="0.23921568627"/>
+            <value type="double" value="0.23921568627"/>
+            <value type="double" value="1.0"/>
+          </property>
+        </property>
+      </property>
+    </property>
+  </property>
+</channel>
+EOF
+fi
+
+# Set up dark terminal theme
+if [ ! -f "${HOME}/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-terminal.xml" ]; then
+    cat > "${HOME}/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-terminal.xml" << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfce4-terminal" version="1.0">
+  <property name="color-background" type="string" value="#1e1e1e"/>
+  <property name="color-foreground" type="string" value="#d4d4d4"/>
+  <property name="color-use-theme" type="bool" value="false"/>
+</channel>
+EOF
+fi
+
+# Create Firefox launcher wrapper (handles sandbox and root-user mismatch in Docker)
+cat > /opt/desktop/scripts/firefox-launcher.sh << SCRIPT
+#!/bin/bash
+export MOZ_DISABLE_CONTENT_SANDBOX=1
+export MOZ_ENABLE_WAYLAND=0
+export HOME="${HOME}"
+if [ "\$(id -u)" = "0" ] && id "${USERNAME}" >/dev/null 2>&1; then
+    exec sudo -u "${USERNAME}" firefox-esr "\$@"
+else
+    exec firefox-esr "\$@"
+fi
+SCRIPT
+chmod +x /opt/desktop/scripts/firefox-launcher.sh
+
 # Create desktop shortcuts
 cat > "${HOME}/Desktop/Firefox.desktop" << 'EOF'
 [Desktop Entry]
@@ -116,7 +196,7 @@ Version=1.0
 Type=Application
 Name=Firefox
 Comment=Browse the Web
-Exec=firefox-esr
+Exec=/opt/desktop/scripts/firefox-launcher.sh
 Icon=firefox-esr
 Terminal=false
 Categories=Network;WebBrowser;
@@ -136,18 +216,55 @@ Categories=System;TerminalEmulator;
 EOF
 chmod +x "${HOME}/Desktop/Terminal.desktop"
 
-cat > "${HOME}/Desktop/File Manager.desktop" << 'EOF'
+cat > "${HOME}/Desktop/File Manager.desktop" << EOF
 [Desktop Entry]
 Version=1.0
 Type=Application
 Name=File Manager
 Comment=Browse the filesystem
-Exec=thunar
+Exec=${FILE_MANAGER}
 Icon=system-file-manager
 Terminal=false
 Categories=System;FileManager;
 EOF
 chmod +x "${HOME}/Desktop/File Manager.desktop"
+
+# Create autostart entry to set up desktop on session start
+# This runs after D-Bus session is available, enabling:
+# - xhost for user-process X display access (needed by Firefox launcher)
+# - metadata::trusted on .desktop files (needed by xfdesktop to launch them)
+mkdir -p "${HOME}/.config/autostart"
+cat > "${HOME}/.config/autostart/desktop-setup.desktop" << AUTOSTART
+[Desktop Entry]
+Type=Application
+Name=Desktop Setup
+Exec=/opt/desktop/scripts/desktop-setup.sh
+Hidden=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+AUTOSTART
+
+cat > /opt/desktop/scripts/desktop-setup.sh << SETUP
+#!/bin/bash
+# Allow local user connections to X display (needed for sudo -u user apps)
+xhost +local: 2>/dev/null || true
+
+# Mark desktop shortcuts as trusted so xfdesktop can execute them
+if command -v gio >/dev/null 2>&1; then
+    for f in "${HOME}/Desktop/"*.desktop; do
+        [ -f "\$f" ] && gio set "\$f" metadata::trusted true 2>/dev/null || true
+    done
+fi
+
+# Fallback: set desktop background color via xfconf-query
+# The XML config monitor name may not match the runtime monitor name
+if command -v xfconf-query >/dev/null 2>&1; then
+    xfconf-query -c xfce4-desktop -p /backdrop/screen0 -r -R 2>/dev/null || true
+    xfconf-query -c xfce4-desktop -n -t int -p /backdrop/screen0/monitorscreen/workspace0/color-style -s 0 2>/dev/null || true
+    xfconf-query -c xfce4-desktop -n -t int -p /backdrop/screen0/monitorscreen/workspace0/image-style -s 0 2>/dev/null || true
+fi
+SETUP
+chmod +x /opt/desktop/scripts/desktop-setup.sh
 
 # Fix permissions
 chown -R "${USERNAME}:${USERNAME}" "${HOME}"

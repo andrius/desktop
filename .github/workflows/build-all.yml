@@ -113,11 +113,13 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Copy base scripts
+      - name: Copy base scripts and plugins
         run: |
           cp docker/base/scripts/env-setup.sh docker/${{ matrix.variant }}/scripts/
           cp docker/base/scripts/init-user.sh docker/${{ matrix.variant }}/scripts/
           cp docker/base/scripts/plugin-manager.sh docker/${{ matrix.variant }}/scripts/
+          rm -rf docker/${{ matrix.variant }}/plugins/
+          cp -r plugins/ docker/${{ matrix.variant }}/plugins/
 
       - name: Build image for scanning
         uses: docker/build-push-action@v5

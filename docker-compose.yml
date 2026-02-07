@@ -1,7 +1,7 @@
 # Docker Compose for Debian Desktop
 # Choose the variant you want to use by uncommenting the appropriate service
 
-version: '3.8'
+name: desktop
 
 x-common-config: &common-config
   restart: unless-stopped
@@ -15,12 +15,7 @@ x-common-config: &common-config
     - DISPLAY=${DISPLAY:-:1}
     - RESOLUTION=${RESOLUTION:-1920x1080x24}
     - TZ=${TZ:-UTC}
-    - ENABLE_CHROME=${ENABLE_CHROME:-false}
-    - ENABLE_NOMACHINE=${ENABLE_NOMACHINE:-false}
-    - ENABLE_CURSOR=${ENABLE_CURSOR:-false}
-    - ENABLE_VSCODE=${ENABLE_VSCODE:-false}
-    - ENABLE_CLAUDE_CODE=${ENABLE_CLAUDE_CODE:-false}
-    - ENABLE_OPENCODE=${ENABLE_OPENCODE:-false}
+    - PLUGINS=${PLUGINS:-}
     - HOMEBREW_NO_AUTO_UPDATE=${HOMEBREW_NO_AUTO_UPDATE:-1}
     - HOMEBREW_NO_ANALYTICS=${HOMEBREW_NO_ANALYTICS:-1}
   volumes:
@@ -41,11 +36,12 @@ services:
         - USER_UID=${USER_UID:-1000}
         - USER_GID=${USER_GID:-1000}
     image: debian-desktop:kasmvnc-${IMAGE_TAG:-latest}
-    container_name: ${COMPOSE_PROJECT_NAME:-debian-desktop}-kasmvnc
     hostname: debian-desktop
     ports:
       - "${VNC_PORT:-5901}:5901"
       - "${VNC_WEB_PORT:-6901}:6901"
+      - "${XRDP_PORT:-3389}:3389"
+      - "${NOMACHINE_PORT:-4000}:4000"
     environment:
       - VNC_PW=${VNC_PW:-vncpassword}
       - VNC_VIEW_ONLY_PW=${VNC_VIEW_ONLY_PW:-}
@@ -74,10 +70,11 @@ services:
         - USER_UID=${USER_UID:-1000}
         - USER_GID=${USER_GID:-1000}
     image: debian-desktop:selkies-${IMAGE_TAG:-latest}
-    container_name: ${COMPOSE_PROJECT_NAME:-debian-desktop}-selkies
     hostname: debian-desktop
     ports:
       - "${SELKIES_WEB_PORT:-8080}:8080"
+      - "${XRDP_PORT:-3389}:3389"
+      - "${NOMACHINE_PORT:-4000}:4000"
     environment:
       - SELKIES_WEB_PORT=${SELKIES_WEB_PORT:-8080}
       - SELKIES_ENCODER=${SELKIES_ENCODER:-x264enc}

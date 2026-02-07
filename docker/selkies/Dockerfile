@@ -202,13 +202,14 @@ RUN SELKIES_VERSION="$(curl -fsSL "https://api.github.com/repos/selkies-project/
     mkdir -p /opt/selkies/web && \
     curl -fsSL "https://github.com/selkies-project/selkies/releases/download/v${SELKIES_VERSION}/selkies-gstreamer-web_v${SELKIES_VERSION}.tar.gz" | tar -xzf - -C /opt/selkies/web
 
-# Copy scripts (base scripts should be copied to scripts/ directory before build)
+# Copy scripts and plugins (base scripts should be copied to scripts/ directory before build)
 # The GitHub workflow or build script handles copying base scripts
 COPY --chmod=755 scripts/ /opt/desktop/scripts/
 COPY --chmod=755 configs/ /opt/desktop/configs/
+COPY --chmod=755 plugins/ /opt/desktop/plugins/
 
-# Create plugin directory
-RUN mkdir -p /opt/desktop/plugins && \
+# Ensure plugin directory structure
+RUN mkdir -p /opt/desktop/plugins/.installed && \
     chown -R ${USERNAME}:${USERNAME} /opt/desktop
 
 # Expose ports

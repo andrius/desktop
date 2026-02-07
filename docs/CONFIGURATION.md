@@ -61,12 +61,11 @@ This guide covers all configuration options for the Debian Docker Desktop.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ENABLE_CHROME` | `false` | Install Google Chrome |
-| `ENABLE_NOMACHINE` | `false` | Install NoMachine server |
-| `ENABLE_CURSOR` | `false` | Install Cursor editor |
-| `ENABLE_VSCODE` | `false` | Install VS Code |
-| `ENABLE_CLAUDE_CODE` | `false` | Install Claude Code CLI |
-| `ENABLE_OPENCODE` | `false` | Install OpenCode CLI |
+| `PLUGINS` | (empty) | Comma-separated list of plugins to install (e.g. `brew,vscode,cursor`) |
+| `XRDP_PORT` | `3389` | Host port for XRDP (when xrdp plugin is enabled) |
+| `NOMACHINE_PORT` | `4000` | Host port for NoMachine (when nomachine plugin is enabled) |
+
+Available plugins: `brew`, `chrome`, `xrdp`, `nomachine`, `cursor`, `vscode`, `claude-code`, `docker`
 
 ### Homebrew Configuration
 
@@ -102,9 +101,7 @@ VNC_PW=mysecurepassword
 VNC_WEB_PORT=6901
 
 # Plugins
-ENABLE_CHROME=true
-ENABLE_VSCODE=true
-ENABLE_CURSOR=true
+PLUGINS=vscode,cursor
 ```
 
 ### XFCE4 Configuration
@@ -166,10 +163,7 @@ SELKIES_ENCODER=vp8enc
 
 ```bash
 USERNAME=developer
-ENABLE_VSCODE=true
-ENABLE_CURSOR=true
-ENABLE_CLAUDE_CODE=true
-ENABLE_CHROME=true
+PLUGINS=brew,vscode,cursor,claude-code
 ```
 
 ### Secure Setup
@@ -196,8 +190,6 @@ TZ=Europe/Berlin      # Germany
 For additional customization, create a `docker-compose.override.yml`:
 
 ```yaml
-version: '3.8'
-
 services:
   desktop:
     # Add GPU support (NVIDIA)
@@ -224,12 +216,13 @@ services:
 
 ### Default Ports
 
-| Service | Internal | Default External |
-|---------|----------|------------------|
-| KasmVNC Web | 6901 | 6901 |
-| KasmVNC VNC | 5901 | 5901 |
-| Selkies Web | 8080 | 8080 |
-| NoMachine | 4000 | 4000 |
+| Service | Internal | Default External | Variable |
+|---------|----------|------------------|----------|
+| KasmVNC Web | 6901 | 6901 | `VNC_WEB_PORT` |
+| KasmVNC VNC | 5901 | 5901 | `VNC_PORT` |
+| Selkies Web | 8080 | 8080 | `SELKIES_WEB_PORT` |
+| XRDP | 3389 | 3389 | `XRDP_PORT` |
+| NoMachine | 4000 | 4000 | `NOMACHINE_PORT` |
 
 ### Custom Port Mapping
 

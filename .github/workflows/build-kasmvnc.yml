@@ -9,6 +9,7 @@ on:
     paths:
       - 'docker/kasmvnc/**'
       - 'docker/base/**'
+      - 'plugins/**'
       - 'scripts/**'
       - '.github/workflows/build-kasmvnc.yml'
   pull_request:
@@ -18,6 +19,7 @@ on:
     paths:
       - 'docker/kasmvnc/**'
       - 'docker/base/**'
+      - 'plugins/**'
       - 'scripts/**'
   workflow_dispatch:
     inputs:
@@ -165,11 +167,14 @@ jobs:
             type=sha,prefix=
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Copy base scripts to kasmvnc context
+      - name: Copy base scripts and plugins to kasmvnc context
         run: |
           cp docker/base/scripts/env-setup.sh docker/kasmvnc/scripts/
           cp docker/base/scripts/init-user.sh docker/kasmvnc/scripts/
           cp docker/base/scripts/plugin-manager.sh docker/kasmvnc/scripts/
+          cp docker/base/scripts/setup-user.sh docker/kasmvnc/scripts/
+          rm -rf docker/kasmvnc/plugins/
+          cp -r plugins/ docker/kasmvnc/plugins/
 
       # Single platform build (load locally)
       - name: Build KasmVNC image (single platform)
@@ -333,11 +338,14 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Copy base scripts
+      - name: Copy base scripts and plugins
         run: |
           cp docker/base/scripts/env-setup.sh docker/kasmvnc/scripts/
           cp docker/base/scripts/init-user.sh docker/kasmvnc/scripts/
           cp docker/base/scripts/plugin-manager.sh docker/kasmvnc/scripts/
+          cp docker/base/scripts/setup-user.sh docker/kasmvnc/scripts/
+          rm -rf docker/kasmvnc/plugins/
+          cp -r plugins/ docker/kasmvnc/plugins/
 
       - name: Build image for testing
         uses: docker/build-push-action@v5
@@ -383,3 +391,51 @@ jobs:
           echo "- Web content validation" >> $GITHUB_STEP_SUMMARY
           echo "- Health check verification" >> $GITHUB_STEP_SUMMARY
           echo "- Log analysis for errors" >> $GITHUB_STEP_SUMMARY
+
+  test-plugins:
+    needs: [prepare, build, merge]
+    if: always() && inputs.skip_tests != true && (needs.build.result == 'success') && (needs.prepare.outputs.is_multi_platform == 'false' || needs.merge.result == 'success')
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        plugin: [brew, xrdp, nomachine, cursor, vscode, claude-code]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Copy base scripts and plugins
+        run: |
+          cp docker/base/scripts/env-setup.sh docker/kasmvnc/scripts/
+          cp docker/base/scripts/init-user.sh docker/kasmvnc/scripts/
+          cp docker/base/scripts/plugin-manager.sh docker/kasmvnc/scripts/
+          cp docker/base/scripts/setup-user.sh docker/kasmvnc/scripts/
+          rm -rf docker/kasmvnc/plugins/
+          cp -r plugins/ docker/kasmvnc/plugins/
+
+      - name: Build image for plugin testing
+        uses: docker/build-push-action@v5
+        with:
+          context: ./docker/kasmvnc
+          file: ./docker/kasmvnc/Dockerfile
+          load: true
+          tags: debian-desktop:kasmvnc-latest
+          cache-from: type=gha,scope=kasmvnc-amd64
+          build-args: |
+            USERNAME=user
+            USER_UID=1000
+            USER_GID=1000
+
+      - name: Test plugin ${{ matrix.plugin }}
+        run: |
+          chmod +x scripts/test-plugins.sh
+          ./scripts/test-plugins.sh ${{ matrix.plugin }} --verbose
+
+      - name: Plugin Test Summary
+        if: always()
+        run: |
+          echo "### Plugin Test: ${{ matrix.plugin }}" >> $GITHUB_STEP_SUMMARY

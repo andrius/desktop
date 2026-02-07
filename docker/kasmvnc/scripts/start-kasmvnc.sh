@@ -1,8 +1,12 @@
 #!/bin/bash
-# Start KasmVNC server
+# Start KasmVNC server (runs as non-root user via gosu)
 set -e
 
 source /opt/desktop/scripts/env-setup.sh
+
+# Start PulseAudio for audio support (runs as current user)
+echo "Starting PulseAudio..."
+pulseaudio --start --exit-idle-time=-1 2>/dev/null || true
 
 # KasmVNC configuration
 # Note: Internal ports are fixed; external port mapping is handled by docker-compose
@@ -61,11 +65,11 @@ exec startxfce4
 EOF
 chmod +x "${VNC_DIR}/xstartup"
 
-# Create KasmVNC configuration - minimal config to disable SSL
+# Create KasmVNC configuration — write to both system and user locations
+# The user config (~/.vnc/kasmvnc.yaml) takes precedence over system config,
+# and vncserver auto-creates it from defaults if missing, so we must write both.
 mkdir -p "${HOME}/.config/kasmvnc"
-# Update system config to ensure SSL settings are applied
-sudo tee /etc/kasmvnc/kasmvnc.yaml > /dev/null << EOF
-desktop:
+KASMVNC_CONFIG="desktop:
   resolution:
     width: $(echo ${VNC_RESOLUTION} | cut -d'x' -f1)
     height: $(echo ${VNC_RESOLUTION} | cut -d'x' -f2)
@@ -86,11 +90,13 @@ encoding:
 
 server:
   http:
-    httpd_directory: /usr/share/kasmvnc/www
-EOF
+    httpd_directory: /usr/share/kasmvnc/www"
 
-# Clean up any existing VNC locks
-rm -f /tmp/.X*-lock /tmp/.X11-unix/X* 2>/dev/null || true
+echo "$KASMVNC_CONFIG" | sudo tee /etc/kasmvnc/kasmvnc.yaml > /dev/null
+echo "$KASMVNC_CONFIG" > "${VNC_DIR}/kasmvnc.yaml"
+
+# Clean up any existing VNC locks (may be root-owned from previous run)
+sudo rm -f /tmp/.X*-lock /tmp/.X11-unix/X* 2>/dev/null || true
 
 # Start KasmVNC server with select-de flag to avoid interactive prompt
 echo "Launching vncserver..."

@@ -1,38 +1,54 @@
 #!/bin/bash
 # Entrypoint script for Debian Desktop Docker with KasmVNC
+# Phase 1: Root setup — user creation, environment, plugins
+# Phase 2: Drop to target user via gosu for VNC server
 set -e
+
+# Phase 1: Root operations
+
+# Create/adjust runtime user
+source /opt/desktop/scripts/setup-user.sh
 
 # Source environment configuration
 source /opt/desktop/scripts/env-setup.sh
 
-# Initialize user environment
+# Initialize user environment (desktop shortcuts, XFCE config)
 /opt/desktop/scripts/init-user.sh
 
-# Start D-Bus
+# Start system D-Bus
 if [ ! -d /run/dbus ]; then
-    sudo mkdir -p /run/dbus
+    mkdir -p /run/dbus
 fi
-sudo dbus-daemon --system --fork 2>/dev/null || true
+dbus-daemon --system --fork 2>/dev/null || true
 
-# Initialize XDG runtime directory
-export XDG_RUNTIME_DIR="/tmp/runtime-${USER}"
-if [ ! -d "$XDG_RUNTIME_DIR" ]; then
-    mkdir -p "$XDG_RUNTIME_DIR"
-    chmod 700 "$XDG_RUNTIME_DIR"
+# Initialize XDG runtime directory with correct ownership
+export XDG_RUNTIME_DIR="/tmp/runtime-${USERNAME}"
+mkdir -p "$XDG_RUNTIME_DIR"
+chmod 700 "$XDG_RUNTIME_DIR"
+chown "${USERNAME}:${USERNAME}" "$XDG_RUNTIME_DIR"
+
+# Update plugins from remote on first boot
+if [ ! -f "/opt/desktop/plugins/.updated" ] && [ -n "${PLUGINS:-}" ]; then
+    /opt/desktop/scripts/plugin-manager.sh update || true
+    touch /opt/desktop/plugins/.updated
 fi
 
-# Install plugins if configured
-if [ -f "/opt/desktop/scripts/plugin-manager.sh" ]; then
-    /opt/desktop/scripts/plugin-manager.sh install
+# Install configured plugins
+/opt/desktop/scripts/plugin-manager.sh install
+
+# Start system services installed by plugins
+[ -x /etc/init.d/xrdp ] && /etc/init.d/xrdp start 2>/dev/null || true
+[ -x /etc/NX/nxserver ] && /etc/NX/nxserver --startup 2>/dev/null || true
+if command -v dockerd &>/dev/null && [ ! -S /var/run/docker.sock ]; then
+    dockerd &>/dev/null &
 fi
+
+# Fix ownership after plugin installs may have modified home
+chown -R "${USERNAME}:${USERNAME}" "/home/${USERNAME}"
 
 # Configure display
 export DISPLAY=${DISPLAY:-:1}
 
-# Start PulseAudio for audio support
-echo "Starting PulseAudio..."
-pulseaudio --start --exit-idle-time=-1 2>/dev/null || true
-
-# Start KasmVNC
-echo "Starting KasmVNC server..."
-exec /opt/desktop/scripts/start-kasmvnc.sh
+# Phase 2: Drop privileges and start KasmVNC as target user
+echo "Switching to user ${USERNAME} for VNC server..."
+exec gosu "${USERNAME}" /opt/desktop/scripts/start-kasmvnc.sh

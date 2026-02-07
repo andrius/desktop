@@ -63,42 +63,48 @@ cp .env.example .env
 
 ### Plugin Configuration
 
-Enable optional software by setting environment variables:
+Enable optional software via the `PLUGINS` environment variable (comma-separated):
 
 ```bash
-ENABLE_CHROME=true       # Google Chrome browser
-ENABLE_VSCODE=true       # Visual Studio Code
-ENABLE_CURSOR=true       # Cursor AI editor
-ENABLE_CLAUDE_CODE=true  # Anthropic's Claude Code CLI
-ENABLE_OPENCODE=true     # OpenCode CLI
-ENABLE_NOMACHINE=true    # NoMachine server
+PLUGINS=brew,vscode,cursor
 ```
 
 ## Available Plugins
 
-| Plugin | Description | Enable Variable |
-|--------|-------------|-----------------|
-| Google Chrome | Chrome browser | `ENABLE_CHROME=true` |
-| NoMachine | Remote desktop server | `ENABLE_NOMACHINE=true` |
-| Cursor | AI-powered code editor | `ENABLE_CURSOR=true` |
-| VS Code | Visual Studio Code | `ENABLE_VSCODE=true` |
-| Claude Code | Anthropic's CLI tool | `ENABLE_CLAUDE_CODE=true` |
-| OpenCode | OpenCode CLI | `ENABLE_OPENCODE=true` |
+| Plugin | Description |
+|--------|-------------|
+| `brew` | Homebrew package manager |
+| `chrome` | Google Chrome browser (amd64 only) |
+| `xrdp` | XRDP remote desktop (port 3389) |
+| `nomachine` | NoMachine remote desktop (port 4000) |
+| `cursor` | Cursor AI code editor |
+| `vscode` | Visual Studio Code |
+| `claude-code` | Claude Code CLI |
+| `docker` | Docker Engine (DinD) |
+
+Each plugin is a self-contained directory with `init.sh`, `tests.sh`, and `README.md`. Plugins install on first boot and are skipped on restart.
 
 ### Manual Plugin Installation
 
-You can also install plugins manually inside the container:
-
 ```bash
-# Enter the container
-docker exec -it debian-desktop-kasmvnc bash
-
-# Install a specific plugin
-/opt/desktop/scripts/plugin-manager.sh chrome
-/opt/desktop/scripts/plugin-manager.sh vscode
-
 # List available plugins
 /opt/desktop/scripts/plugin-manager.sh list
+
+# Install a specific plugin
+/opt/desktop/scripts/plugin-manager.sh vscode
+
+# Test a plugin
+/opt/desktop/scripts/plugin-manager.sh test vscode
+```
+
+### Plugin Testing
+
+```bash
+# Test plugins in isolated containers
+./scripts/test-plugins.sh brew vscode --verbose
+
+# Test all plugins
+./scripts/test-plugins.sh --all --verbose
 ```
 
 ## Image Variants
@@ -117,6 +123,17 @@ docker exec -it debian-desktop-kasmvnc bash
 - **Features**: WebRTC streaming, hardware acceleration support
 - **Access**: `http://localhost:8080`
 - **Note**: May require TURN server for NAT traversal
+
+## Port Forwarding
+
+| Service | Port | Protocol | Notes |
+|---------|------|----------|-------|
+| KasmVNC Web | 6901 | HTTP/WebSocket | Built-in, always available |
+| Selkies Web | 8080 | WebRTC | Built-in, may need TURN server |
+| XRDP | 3389 | RDP/TCP | Requires `xrdp` plugin |
+| NoMachine | 4000 | NX/TCP+UDP | Requires `nomachine` plugin |
+
+XRDP and NoMachine ports are pre-configured in all compose files. Enable the corresponding plugin to activate the service.
 
 ## Building Images
 
@@ -169,10 +186,8 @@ docker exec -it debian-desktop-kasmvnc bash
 ```
 .
 ├── docker/
-│   ├── base/           # Base image components (shared scripts)
-│   │   ├── Dockerfile
-│   │   ├── scripts/
-│   │   └── configs/
+│   ├── base/           # Shared base scripts (canonical source)
+│   │   └── scripts/    # env-setup.sh, init-user.sh, plugin-manager.sh
 │   ├── kasmvnc/        # KasmVNC variant
 │   │   ├── Dockerfile
 │   │   ├── scripts/
@@ -181,13 +196,22 @@ docker exec -it debian-desktop-kasmvnc bash
 │       ├── Dockerfile
 │       ├── scripts/
 │       └── configs/
+├── plugins/            # Plugin system (each has init.sh, tests.sh, README.md)
+│   ├── brew/
+│   ├── chrome/
+│   ├── claude-code/
+│   ├── cursor/
+│   ├── docker/
+│   ├── nomachine/
+│   ├── vscode/
+│   └── xrdp/
 ├── scripts/
-│   ├── plugins/        # Plugin installation scripts
-│   └── maintenance/    # System maintenance scripts
-├── docs/               # Documentation
+│   ├── test-image.sh       # Integration test script
+│   └── test-plugins.sh     # Plugin test runner
+├── docs/                    # Documentation
 ├── .github/
-│   └── workflows/      # GitHub Actions workflows
-├── docker-compose.yml              # Main compose file
+│   └── workflows/           # GitHub Actions workflows
+├── docker-compose.yml              # Combined compose (profiles)
 ├── docker-compose.kasmvnc.yml     # KasmVNC-specific compose
 ├── docker-compose.selkies.yml     # Selkies-specific compose
 ├── .env.example                    # Environment template
