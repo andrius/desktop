@@ -13,7 +13,7 @@ ARG USERNAME=user
 ARG USER_UID=1000
 ARG USER_GID=1000
 ARG DEBIAN_FRONTEND=noninteractive
-ARG KASMVNC_VERSION=1.3.3
+ARG KASMVNC_VERSION=1.4.0
 ARG TARGETARCH
 
 # Environment variables
@@ -137,7 +137,7 @@ RUN sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && locale-gen en_US.UTF-8 && 
     # Install KasmVNC (architecture auto-detected from buildx TARGETARCH)
     cd /tmp && \
     KASM_ARCH="${TARGETARCH:-amd64}" && \
-    KASM_RELEASE="bookworm" && \
+    KASM_RELEASE="trixie" && \
     wget -q "https://github.com/kasmtech/KasmVNC/releases/download/v${KASMVNC_VERSION}/kasmvncserver_${KASM_RELEASE}_${KASMVNC_VERSION}_${KASM_ARCH}.deb" -O kasmvnc.deb && \
     apt-get update && \
     apt-get install -y ./kasmvnc.deb && \
