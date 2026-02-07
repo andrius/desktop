@@ -48,14 +48,9 @@ fi
 dpkg -i "${NOMACHINE_DEB}" || { apt-get install -f -y && dpkg -i "${NOMACHINE_DEB}"; }
 rm -f "${NOMACHINE_DEB}"
 
-# Register NoMachine libraries with the system linker — nxagent bundles its own
-# libnx*.so, libfontenc, libfreetype, libcrypto, libperl in /usr/NX/lib
-log "Registering NoMachine libraries with ldconfig..."
-cat > /etc/ld.so.conf.d/nomachine.conf << 'LDCONF'
-/usr/NX/lib
-/usr/NX/lib/perl
-LDCONF
-ldconfig
+# NoMachine bundles its own libraries in /usr/NX/lib — DO NOT register with ldconfig
+# (NoMachine's libcrypt.so.1 conflicts with system libcrypt and breaks vncpasswd/chpasswd)
+# NoMachine wrapper scripts (nxnode, nxserver) set LD_LIBRARY_PATH internally
 
 # Stop NoMachine immediately — dpkg postinst starts it with default config
 log "Stopping NoMachine default services before reconfiguration..."
