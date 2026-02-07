@@ -32,6 +32,17 @@ apt-get update
 apt-get install -y google-chrome-stable
 rm -rf /var/lib/apt/lists/*
 
+# Disable suid sandbox — Chromium's credentials.cc aborts in Docker containers
+# that lack user namespace support, even with --no-sandbox
+if [ -f /opt/google/chrome/chrome-sandbox ]; then
+    chmod 0755 /opt/google/chrome/chrome-sandbox
+fi
+
+# Patch system .desktop entry with --no-sandbox for application menu
+if [ -f /usr/share/applications/google-chrome.desktop ]; then
+    sed -i 's|Exec=/usr/bin/google-chrome-stable|Exec=/usr/bin/google-chrome-stable --no-sandbox|g' /usr/share/applications/google-chrome.desktop
+fi
+
 # Create desktop shortcut
 cat > "${HOME}/Desktop/Chrome.desktop" << 'EOF'
 [Desktop Entry]

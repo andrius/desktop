@@ -25,6 +25,17 @@ apt-get update
 apt-get install -y code
 rm -rf /var/lib/apt/lists/*
 
+# Disable suid sandbox — Chromium's credentials.cc aborts in Docker containers
+# that lack user namespace support, even with --no-sandbox
+if [ -f /usr/share/code/chrome-sandbox ]; then
+    chmod 0755 /usr/share/code/chrome-sandbox
+fi
+
+# Patch system .desktop entry with --no-sandbox for application menu
+if [ -f /usr/share/applications/code.desktop ]; then
+    sed -i 's|Exec=/usr/share/code/code|Exec=/usr/share/code/code --no-sandbox|g' /usr/share/applications/code.desktop
+fi
+
 # Create desktop shortcut
 cat > "${HOME}/Desktop/VSCode.desktop" << 'EOF'
 [Desktop Entry]

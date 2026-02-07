@@ -42,11 +42,30 @@ fi
 dpkg -i cursor.deb || apt-get install -f -y
 rm -f cursor.deb
 
-# Copy system desktop entry to user desktop
+# Disable suid sandbox — Chromium's credentials.cc aborts in Docker containers
+# that lack user namespace support, even with --no-sandbox
+chmod 0755 /usr/share/cursor/chrome-sandbox
+
+# Create desktop shortcut with --no-sandbox (required in containers)
+cat > "${HOME}/Desktop/Cursor.desktop" << 'DESKTOP'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Cursor
+Comment=The AI Code Editor
+Exec=/usr/share/cursor/cursor --no-sandbox %F
+Icon=co.anysphere.cursor
+Terminal=false
+Categories=Development;IDE;
+StartupNotify=false
+StartupWMClass=Cursor
+DESKTOP
+chmod +x "${HOME}/Desktop/Cursor.desktop"
+chown "${USERNAME}:${USERNAME}" "${HOME}/Desktop/Cursor.desktop"
+
+# Also patch the system .desktop entry for application menu
 if [ -f /usr/share/applications/cursor.desktop ]; then
-    cp /usr/share/applications/cursor.desktop "${HOME}/Desktop/Cursor.desktop"
-    chmod +x "${HOME}/Desktop/Cursor.desktop"
-    chown "${USERNAME}:${USERNAME}" "${HOME}/Desktop/Cursor.desktop"
+    sed -i 's|Exec=/usr/share/cursor/cursor|Exec=/usr/share/cursor/cursor --no-sandbox|g' /usr/share/applications/cursor.desktop
 fi
 
 log "Cursor installed successfully"
