@@ -68,4 +68,13 @@ sed -i 's/^#\?CreateDisplay .*/CreateDisplay 0/' "$SERVER_CFG"
 # Ensure XFCE4 as the default desktop
 sed -i 's|^#\?DefaultDesktopCommand .*|DefaultDesktopCommand "/usr/bin/startxfce4"|' "$NODE_CFG"
 
+# KasmVNC runs on display :1, not the default :0
+sed -i 's/^#\?PhysicalDisplays .*/PhysicalDisplays :1/' "$NODE_CFG"
+
+# Disable "your desktop is currently viewed" popup (annoying in headless/remote use)
+sed -i 's/^#\?ShowDesktopViewed .*/ShowDesktopViewed 0/' "$NODE_CFG"
+
+# Hide system tray icon
+sed -i 's/^#\?DisplayMonitorIcon .*/DisplayMonitorIcon 0/' "$NODE_CFG"
+
 log "NoMachine installed successfully (port 4000, physical desktop on display :1)"
