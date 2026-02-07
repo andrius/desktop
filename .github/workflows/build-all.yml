@@ -1,4 +1,4 @@
-# GitHub Actions workflow for building all image variants
+# GitHub Actions workflow for building all images
 name: Build All Images
 
 on:
@@ -79,18 +79,9 @@ jobs:
         env:
           ARCHITECTURES: ${{ inputs.architectures || 'amd64,arm64' }}
 
-  build-kasmvnc:
+  build:
     needs: prepare
-    uses: ./.github/workflows/build-kasmvnc.yml
-    with:
-      push_image: ${{ inputs.push_images != false }}
-      skip_tests: ${{ inputs.skip_tests == true }}
-      architectures: ${{ needs.prepare.outputs.architectures }}
-    secrets: inherit
-
-  build-selkies:
-    needs: prepare
-    uses: ./.github/workflows/build-selkies.yml
+    uses: ./.github/workflows/build.yml
     with:
       push_image: ${{ inputs.push_images != false }}
       skip_tests: ${{ inputs.skip_tests == true }}
@@ -98,16 +89,12 @@ jobs:
     secrets: inherit
 
   security-scan:
-    needs: [prepare, build-kasmvnc, build-selkies]
+    needs: [prepare, build]
     runs-on: ubuntu-latest
-    if: always() && (needs.build-kasmvnc.result == 'success' || needs.build-kasmvnc.result == 'skipped') && (needs.build-selkies.result == 'success' || needs.build-selkies.result == 'skipped')
+    if: always() && (needs.build.result == 'success' || needs.build.result == 'skipped')
     permissions:
       contents: read
       security-events: write
-
-    strategy:
-      matrix:
-        variant: [kasmvnc, selkies]
 
     steps:
       - name: Checkout repository
@@ -118,25 +105,25 @@ jobs:
 
       - name: Copy base scripts and plugins
         run: |
-          cp docker/base/scripts/env-setup.sh docker/${{ matrix.variant }}/scripts/
-          cp docker/base/scripts/init-user.sh docker/${{ matrix.variant }}/scripts/
-          cp docker/base/scripts/plugin-manager.sh docker/${{ matrix.variant }}/scripts/
-          cp docker/base/scripts/setup-user.sh docker/${{ matrix.variant }}/scripts/
-          rm -rf docker/${{ matrix.variant }}/plugins/
-          cp -r plugins/ docker/${{ matrix.variant }}/plugins/
+          cp docker/base/scripts/env-setup.sh docker/kasmvnc/scripts/
+          cp docker/base/scripts/init-user.sh docker/kasmvnc/scripts/
+          cp docker/base/scripts/plugin-manager.sh docker/kasmvnc/scripts/
+          cp docker/base/scripts/setup-user.sh docker/kasmvnc/scripts/
+          rm -rf docker/kasmvnc/plugins/
+          cp -r plugins/ docker/kasmvnc/plugins/
 
       - name: Build image for scanning
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
         with:
-          context: ./docker/${{ matrix.variant }}
+          context: ./docker/kasmvnc
           load: true
-          tags: debian-desktop:${{ matrix.variant }}-latest
-          cache-from: type=gha,scope=${{ matrix.variant }}-amd64
+          tags: desktop:latest
+          cache-from: type=gha,scope=desktop-amd64
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
         with:
-          image-ref: 'debian-desktop:${{ matrix.variant }}-latest'
+          image-ref: 'desktop:latest'
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
@@ -148,7 +135,7 @@ jobs:
           sarif_file: 'trivy-results.sarif'
 
   summary:
-    needs: [prepare, build-kasmvnc, build-selkies, security-scan]
+    needs: [prepare, build, security-scan]
     runs-on: ubuntu-latest
     if: always()
 
@@ -160,7 +147,7 @@ jobs:
           echo "**Architectures:** ${{ needs.prepare.outputs.architectures }}" >> $GITHUB_STEP_SUMMARY
           echo "**Multi-platform:** ${{ needs.prepare.outputs.is_multi_platform }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Image | Build | Security |" >> $GITHUB_STEP_SUMMARY
-          echo "|-------|-------|----------|" >> $GITHUB_STEP_SUMMARY
-          echo "| KasmVNC | ${{ needs.build-kasmvnc.result == 'success' && 'Pass' || (needs.build-kasmvnc.result == 'skipped' && 'Skipped' || 'Failed') }} | ${{ needs.security-scan.result == 'success' && 'Pass' || (needs.security-scan.result == 'skipped' && 'Skipped' || 'Failed') }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Selkies | ${{ needs.build-selkies.result == 'success' && 'Pass' || (needs.build-selkies.result == 'skipped' && 'Skipped' || 'Failed') }} | ${{ needs.security-scan.result == 'success' && 'Pass' || (needs.security-scan.result == 'skipped' && 'Skipped' || 'Failed') }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Step | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Build | ${{ needs.build.result == 'success' && 'Pass' || (needs.build.result == 'skipped' && 'Skipped' || 'Failed') }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security Scan | ${{ needs.security-scan.result == 'success' && 'Pass' || (needs.security-scan.result == 'skipped' && 'Skipped' || 'Failed') }} |" >> $GITHUB_STEP_SUMMARY

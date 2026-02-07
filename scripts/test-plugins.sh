@@ -18,7 +18,6 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-VARIANT="kasmvnc"
 TIMEOUT_STARTUP=120
 RETRY_INTERVAL=5
 
@@ -47,23 +46,18 @@ while [[ $# -gt 0 ]]; do
             CLEANUP=false
             shift
             ;;
-        --variant)
-            VARIANT="$2"
-            shift 2
-            ;;
         --all)
             PLUGINS=("${ALL_PLUGINS[@]}")
             shift
             ;;
         -h|--help)
-            echo "Usage: $0 [plugin...] [--variant kasmvnc|selkies] [--verbose] [--no-cleanup] [--all]"
+            echo "Usage: $0 [plugin...] [--verbose] [--no-cleanup] [--all]"
             echo ""
             echo "Test plugins in isolated containers."
             echo ""
             echo "Plugins: ${ALL_PLUGINS[*]} docker"
             echo ""
             echo "Options:"
-            echo "  --variant     Image variant to test (default: kasmvnc)"
             echo "  --verbose     Show detailed output"
             echo "  --no-cleanup  Keep containers after test"
             echo "  --all         Test all plugins (excluding docker)"
@@ -83,7 +77,7 @@ if [ ${#PLUGINS[@]} -eq 0 ]; then
     PLUGINS=("${ALL_PLUGINS[@]}")
 fi
 
-IMAGE_NAME="debian-desktop:${VARIANT}-latest"
+IMAGE_NAME="desktop:latest"
 
 log_info()  { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
@@ -93,7 +87,7 @@ log_verbose() { [[ "$VERBOSE" == "true" ]] && echo -e "[DEBUG] $1"; }
 # Check image exists
 if ! docker image inspect "$IMAGE_NAME" &>/dev/null; then
     log_error "Image not found: $IMAGE_NAME"
-    log_info "Build first with: make build-${VARIANT}"
+    log_info "Build first with: make build"
     exit 2
 fi
 

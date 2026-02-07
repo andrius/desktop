@@ -15,7 +15,7 @@ Updates all system packages, Homebrew, and other package managers.
 /opt/desktop/scripts/maintenance/update-system.sh
 
 # Or from host
-docker exec debian-desktop-kasmvnc /opt/desktop/scripts/maintenance/update-system.sh
+docker compose exec desktop /opt/desktop/scripts/maintenance/update-system.sh
 ```
 
 **What it updates:**
@@ -34,7 +34,7 @@ Removes temporary files, caches, and frees up disk space.
 /opt/desktop/scripts/maintenance/cleanup.sh
 
 # Or from host
-docker exec debian-desktop-kasmvnc /opt/desktop/scripts/maintenance/cleanup.sh
+docker compose exec desktop /opt/desktop/scripts/maintenance/cleanup.sh
 ```
 
 **What it cleans:**
@@ -58,7 +58,7 @@ Performs a comprehensive health check of the system.
 /opt/desktop/scripts/maintenance/health-check.sh
 
 # Or from host
-docker exec debian-desktop-kasmvnc /opt/desktop/scripts/maintenance/health-check.sh
+docker compose exec desktop /opt/desktop/scripts/maintenance/health-check.sh
 ```
 
 **What it checks:**
@@ -93,24 +93,24 @@ docker exec debian-desktop-kasmvnc /opt/desktop/scripts/maintenance/health-check
 
 ```bash
 # View container logs
-docker logs debian-desktop-kasmvnc
+docker compose logs
 
 # Follow logs in real-time
-docker logs -f debian-desktop-kasmvnc
+docker compose logs -f
 
 # View last 100 lines
-docker logs --tail 100 debian-desktop-kasmvnc
+docker compose logs --tail 100
 ```
 
 ### Restarting Services
 
 ```bash
 # Restart the entire container
-docker restart debian-desktop-kasmvnc
+docker compose restart
 
 # Restart specific services inside container
-docker exec debian-desktop-kasmvnc pkill -HUP Xvfb
-docker exec debian-desktop-kasmvnc pkill -HUP vncserver
+docker compose exec desktop pkill -HUP Xvfb
+docker compose exec desktop pkill -HUP vncserver
 ```
 
 ### Backup User Data
@@ -119,11 +119,11 @@ The user's home directory is stored in a Docker volume. To backup:
 
 ```bash
 # Create a backup
-docker run --rm -v debian-desktop-kasmvnc-home:/data -v $(pwd):/backup \
+docker run --rm -v desktop-home:/data -v $(pwd):/backup \
   alpine tar czf /backup/home-backup-$(date +%Y%m%d).tar.gz -C /data .
 
 # Restore from backup
-docker run --rm -v debian-desktop-kasmvnc-home:/data -v $(pwd):/backup \
+docker run --rm -v desktop-home:/data -v $(pwd):/backup \
   alpine tar xzf /backup/home-backup-YYYYMMDD.tar.gz -C /data
 ```
 
@@ -133,10 +133,10 @@ To update to a new image while preserving data:
 
 ```bash
 # Pull latest image
-docker compose -f docker-compose.kasmvnc.yml pull
+docker compose pull
 
 # Recreate container (volumes are preserved)
-docker compose -f docker-compose.kasmvnc.yml up -d --force-recreate
+docker compose up -d --force-recreate
 ```
 
 ## Troubleshooting
@@ -186,7 +186,7 @@ docker compose -f docker-compose.kasmvnc.yml up -d --force-recreate
 
 3. Check Docker network:
    ```bash
-   docker network inspect debian-desktop-network
+   docker network inspect desktop-network
    ```
 
 ### VNC Connection Issues
@@ -264,5 +264,5 @@ The GitHub Actions workflows include automated vulnerability scanning with Trivy
 ```bash
 # Scan with Trivy
 docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-  aquasec/trivy image debian-desktop:kasmvnc-latest
+  aquasec/trivy image desktop:latest
 ```

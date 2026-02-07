@@ -1,6 +1,6 @@
 #!/bin/bash
-# Test script for Debian Desktop Docker images
-# Usage: ./scripts/test-image.sh [kasmvnc|selkies] [--local]
+# Test script for Debian Desktop Docker image
+# Usage: ./scripts/test-image.sh [--local] [--no-cleanup] [--verbose]
 #
 # Options:
 #   --local     Build image locally before testing (default: use existing image)
@@ -32,14 +32,16 @@ LOCAL_BUILD=false
 CLEANUP=true
 VERBOSE=false
 
+# Image configuration
+IMAGE_NAME="desktop:latest"
+COMPOSE_FILE="docker-compose.yml"
+WEB_PORT=6901
+HEALTH_ENDPOINT="/"
+EXPECTED_CONTENT="KasmVNC"
+
 # Parse arguments
-VARIANT=""
 while [[ $# -gt 0 ]]; do
     case $1 in
-        kasmvnc|selkies)
-            VARIANT="$1"
-            shift
-            ;;
         --local)
             LOCAL_BUILD=true
             shift
@@ -53,12 +55,9 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         -h|--help)
-            echo "Usage: $0 [kasmvnc|selkies] [--local] [--no-cleanup] [--verbose]"
+            echo "Usage: $0 [--local] [--no-cleanup] [--verbose]"
             echo ""
-            echo "Test Debian Desktop Docker images"
-            echo ""
-            echo "Arguments:"
-            echo "  kasmvnc|selkies  Image variant to test (required)"
+            echo "Test Debian Desktop Docker image"
             echo ""
             echo "Options:"
             echo "  --local          Build image locally before testing"
@@ -73,30 +72,6 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
-
-if [[ -z "$VARIANT" ]]; then
-    echo -e "${RED}Error: Image variant required (kasmvnc or selkies)${NC}"
-    echo "Usage: $0 [kasmvnc|selkies] [--local] [--no-cleanup] [--verbose]"
-    exit 2
-fi
-
-# Set variant-specific configuration
-case $VARIANT in
-    kasmvnc)
-        COMPOSE_FILE="docker-compose.kasmvnc.yml"
-        WEB_PORT=6901
-        IMAGE_NAME="debian-desktop:kasmvnc-latest"
-        HEALTH_ENDPOINT="/"
-        EXPECTED_CONTENT="KasmVNC"
-        ;;
-    selkies)
-        COMPOSE_FILE="docker-compose.selkies.yml"
-        WEB_PORT=8080
-        IMAGE_NAME="debian-desktop:selkies-latest"
-        HEALTH_ENDPOINT="/"
-        EXPECTED_CONTENT="Selkies"
-        ;;
-esac
 
 # Helper functions
 log_info() {
@@ -124,7 +99,7 @@ cleanup() {
         docker compose -f "$COMPOSE_FILE" down --volumes --remove-orphans 2>/dev/null || true
     else
         log_warn "Skipping cleanup (--no-cleanup specified)"
-        log_info "Container is still running. Stop with: docker compose -f $COMPOSE_FILE down"
+        log_info "Container is still running. Stop with: docker compose down"
     fi
 }
 
@@ -133,15 +108,15 @@ trap cleanup EXIT
 
 # Main test functions
 test_build() {
-    log_info "Building $VARIANT image..."
+    log_info "Building image..."
     cd "$PROJECT_DIR"
 
     # Prepare build context
     make prepare
 
     # Build the image
-    if ! make "build-$VARIANT"; then
-        log_error "Failed to build $VARIANT image"
+    if ! make build; then
+        log_error "Failed to build image"
         return 1
     fi
 
@@ -296,13 +271,11 @@ test_container_logs() {
         return 1
     fi
 
-    # Check VNC server started (for kasmvnc)
-    if [[ "$VARIANT" == "kasmvnc" ]]; then
-        if echo "$LOGS" | grep -q "New.*desktop is"; then
-            log_info "VNC server started successfully"
-        else
-            log_warn "VNC server startup message not found in logs"
-        fi
+    # Check VNC server started
+    if echo "$LOGS" | grep -q "New.*desktop is"; then
+        log_info "VNC server started successfully"
+    else
+        log_warn "VNC server startup message not found in logs"
     fi
 
     if [[ "$VERBOSE" == "true" ]]; then
@@ -444,7 +417,7 @@ run_tests() {
 
     echo ""
     echo "========================================"
-    echo "  Testing $VARIANT image"
+    echo "  Testing desktop image"
     echo "========================================"
     echo ""
 
@@ -501,7 +474,7 @@ run_tests() {
         fi
     fi
 
-    if [[ $failed -eq 0 && "$VARIANT" == "kasmvnc" ]]; then
+    if [[ $failed -eq 0 ]]; then
         # Test 8: Custom user configuration
         if ! test_custom_user; then
             failed=1

@@ -35,28 +35,6 @@ This guide covers all configuration options for the Debian Docker Desktop.
 | `KASM_SVC_UPLOADS` | `1` | Enable file uploads |
 | `KASM_SVC_DOWNLOADS` | `1` | Enable file downloads |
 
-### Selkies Configuration
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `SELKIES_WEB_PORT` | `8080` | Web interface port |
-| `SELKIES_ENCODER` | `x264enc` | Video encoder |
-| `SELKIES_ENABLE_RESIZE` | `true` | Allow window resizing |
-| `SELKIES_ENABLE_BASIC_AUTH` | `false` | Enable HTTP basic auth |
-| `SELKIES_BASIC_AUTH_USER` | (empty) | Basic auth username |
-| `SELKIES_BASIC_AUTH_PASSWORD` | (empty) | Basic auth password |
-| `FRAMERATE` | `30` | Target frame rate |
-
-#### Selkies TURN Server (for NAT traversal)
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `SELKIES_TURN_HOST` | (empty) | TURN server hostname |
-| `SELKIES_TURN_PORT` | (empty) | TURN server port |
-| `SELKIES_TURN_USERNAME` | (empty) | TURN username |
-| `SELKIES_TURN_PASSWORD` | (empty) | TURN password |
-| `SELKIES_TURN_PROTOCOL` | `udp` | TURN protocol (udp/tcp) |
-
 ### Plugin Configuration
 
 | Variable | Default | Description |
@@ -113,9 +91,7 @@ XFCE4 configuration is stored in `~/.config/xfce4/`. Key files:
 - `xfconf/xfce-perchannel-xml/xfwm4.xml` - Window manager settings
 - `xfconf/xfce-perchannel-xml/xsettings.xml` - General settings
 
-### VNC Configuration
-
-#### KasmVNC
+### KasmVNC Configuration
 
 Configuration file: `~/.config/kasmvnc/kasmvnc.yaml`
 
@@ -137,10 +113,6 @@ encoding:
   max_frame_rate: 60
 ```
 
-#### Selkies
-
-Configuration is primarily via environment variables. For advanced configuration, modify `/opt/desktop/scripts/start-selkies.sh`.
-
 ## Common Configurations
 
 ### High-Resolution Display
@@ -148,15 +120,6 @@ Configuration is primarily via environment variables. For advanced configuration
 ```bash
 RESOLUTION=2560x1440x24
 VNC_RESOLUTION=2560x1440
-```
-
-### Low-Bandwidth Mode
-
-```bash
-RESOLUTION=1280x720x16
-VNC_COL_DEPTH=16
-FRAMERATE=15
-SELKIES_ENCODER=vp8enc
 ```
 
 ### Development Setup
@@ -170,9 +133,6 @@ PLUGINS=brew,vscode,cursor,claude-code
 
 ```bash
 VNC_PW=very_secure_password_here
-SELKIES_ENABLE_BASIC_AUTH=true
-SELKIES_BASIC_AUTH_USER=admin
-SELKIES_BASIC_AUTH_PASSWORD=secure_password
 ```
 
 ### Custom Timezone
@@ -220,7 +180,6 @@ services:
 |---------|----------|------------------|----------|
 | KasmVNC Web | 6901 | 6901 | `VNC_WEB_PORT` |
 | KasmVNC VNC | 5901 | 5901 | `VNC_PORT` |
-| Selkies Web | 8080 | 8080 | `SELKIES_WEB_PORT` |
 | XRDP | 3389 | 3389 | `XRDP_PORT` |
 | NoMachine | 4000 | 4000 | `NOMACHINE_PORT` |
 
@@ -237,7 +196,7 @@ ports:
 Or via command line:
 
 ```bash
-docker run -p 8443:6901 -p 5900:5901 debian-desktop:kasmvnc
+docker run -p 8443:6901 -p 5900:5901 desktop:latest
 ```
 
 ## Volume Configuration

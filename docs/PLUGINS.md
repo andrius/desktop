@@ -65,21 +65,20 @@ PLUGINS=brew,claude-code
 
 ## Remote Access & Port Forwarding
 
-The desktop can be accessed via multiple methods. Built-in methods (KasmVNC, Selkies) are always available; plugin methods require the corresponding plugin.
+The desktop can be accessed via multiple methods. KasmVNC is built-in; plugin methods require the corresponding plugin.
 
 | Method | Protocol | Port | Plugin | Notes |
 |--------|----------|------|--------|-------|
 | KasmVNC | HTTP/WebSocket | 6901 | built-in | Web browser access, file transfer, audio |
-| Selkies | WebRTC | 8080 | built-in | Low latency, may need TURN server for NAT |
 | XRDP | RDP/TCP | 3389 | `xrdp` | Standard RDP clients (mstsc, Remmina, FreeRDP) |
 | NoMachine | NX/TCP+UDP | 4000 | `nomachine` | NoMachine client required |
 
 ### Port Forwarding in Compose Files
 
-KasmVNC and Selkies ports are always exposed. XRDP and NoMachine ports are pre-configured in the compose files so they're ready when the plugins are enabled:
+KasmVNC ports are always exposed. XRDP and NoMachine ports are pre-configured in the compose file so they're ready when the plugins are enabled:
 
 ```yaml
-# docker-compose.kasmvnc.yml / docker-compose.selkies.yml
+# docker-compose.yml
 ports:
   - "${XRDP_PORT:-3389}:3389"
   - "${NOMACHINE_PORT:-4000}:4000"

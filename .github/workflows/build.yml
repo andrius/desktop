@@ -1,5 +1,5 @@
-# GitHub Actions workflow for building KasmVNC variant
-name: Build KasmVNC Image
+# GitHub Actions workflow for building the desktop image
+name: Build Image
 
 on:
   push:
@@ -11,7 +11,7 @@ on:
       - 'docker/base/**'
       - 'plugins/**'
       - 'scripts/**'
-      - '.github/workflows/build-kasmvnc.yml'
+      - '.github/workflows/build.yml'
   pull_request:
     branches:
       - main
@@ -62,7 +62,7 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}/debian-desktop-kasmvnc
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   prepare:
@@ -171,7 +171,7 @@ jobs:
             type=sha,prefix=
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Copy base scripts and plugins to kasmvnc context
+      - name: Copy base scripts and plugins to build context
         run: |
           cp docker/base/scripts/env-setup.sh docker/kasmvnc/scripts/
           cp docker/base/scripts/init-user.sh docker/kasmvnc/scripts/
@@ -181,7 +181,7 @@ jobs:
           cp -r plugins/ docker/kasmvnc/plugins/
 
       # Single platform build (load locally)
-      - name: Build KasmVNC image (single platform)
+      - name: Build image (single platform)
         if: needs.prepare.outputs.is_multi_platform == 'false'
         id: build_single
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
@@ -192,11 +192,11 @@ jobs:
           push: ${{ github.event_name != 'pull_request' || inputs.push_image == true }}
           load: ${{ github.event_name == 'pull_request' && inputs.push_image != true }}
           tags: |
-            debian-desktop:kasmvnc-latest
+            desktop:latest
             ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=kasmvnc-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=kasmvnc-${{ matrix.arch }}
+          cache-from: type=gha,scope=desktop-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=desktop-${{ matrix.arch }}
           build-args: |
             USERNAME=user
             USER_UID=1000
@@ -213,8 +213,8 @@ jobs:
           platforms: ${{ matrix.platform }}
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=kasmvnc-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=kasmvnc-${{ matrix.arch }}
+          cache-from: type=gha,scope=desktop-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=desktop-${{ matrix.arch }}
           build-args: |
             USERNAME=user
             USER_UID=1000
@@ -240,7 +240,7 @@ jobs:
         if: needs.prepare.outputs.is_multi_platform == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: digests-kasmvnc-${{ matrix.arch }}
+          name: digests-${{ matrix.arch }}
           path: /tmp/digests/*
           if-no-files-found: error
           retention-days: 1
@@ -249,7 +249,7 @@ jobs:
         if: needs.prepare.outputs.is_multi_platform == 'false' && (github.event_name == 'pull_request' && inputs.push_image != true)
         run: |
           echo "### Image Size (${{ matrix.arch }})" >> $GITHUB_STEP_SUMMARY
-          docker images debian-desktop:kasmvnc-latest --format "table {{.Repository}}:{{.Tag}}\t{{.Size}}" >> $GITHUB_STEP_SUMMARY
+          docker images desktop:latest --format "table {{.Repository}}:{{.Tag}}\t{{.Size}}" >> $GITHUB_STEP_SUMMARY
 
       - name: Generate SBOM
         if: github.event_name != 'pull_request' && needs.prepare.outputs.is_multi_platform == 'false'
@@ -287,8 +287,8 @@ jobs:
           context: ./docker/kasmvnc
           file: ./docker/kasmvnc/Dockerfile
           load: true
-          tags: debian-desktop:kasmvnc-latest
-          cache-from: type=gha,scope=kasmvnc-${{ matrix.arch }}
+          tags: desktop:latest
+          cache-from: type=gha,scope=desktop-${{ matrix.arch }}
           build-args: |
             USERNAME=user
             USER_UID=1000
@@ -298,13 +298,13 @@ jobs:
         id: test
         run: |
           chmod +x scripts/test-image.sh
-          ./scripts/test-image.sh kasmvnc --verbose
+          ./scripts/test-image.sh --verbose
 
       - name: Upload test logs on failure
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: kasmvnc-test-logs-${{ matrix.arch }}
+          name: test-logs-${{ matrix.arch }}
           path: |
             /tmp/*.log
           retention-days: 7
@@ -312,7 +312,7 @@ jobs:
       - name: Test Summary
         if: always()
         run: |
-          echo "### KasmVNC Integration Test Results (${{ matrix.arch }})" >> $GITHUB_STEP_SUMMARY
+          echo "### Integration Test Results (${{ matrix.arch }})" >> $GITHUB_STEP_SUMMARY
           if [ "${{ steps.test.outcome }}" == "success" ]; then
             echo "All tests passed" >> $GITHUB_STEP_SUMMARY
           else
@@ -366,8 +366,8 @@ jobs:
           context: ./docker/kasmvnc
           file: ./docker/kasmvnc/Dockerfile
           load: true
-          tags: debian-desktop:kasmvnc-latest
-          cache-from: type=gha,scope=kasmvnc-${{ matrix.arch }}
+          tags: desktop:latest
+          cache-from: type=gha,scope=desktop-${{ matrix.arch }}
           build-args: |
             USERNAME=user
             USER_UID=1000
@@ -399,7 +399,7 @@ jobs:
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: /tmp/digests
-          pattern: digests-kasmvnc-*
+          pattern: digests-*
           merge-multiple: true
 
       - name: Set up Docker Buildx

@@ -31,10 +31,8 @@ show_help() {
     echo "Usage: $0 [command]"
     echo ""
     echo "Commands:"
-    echo "  all       - Build all images (default)"
-    echo "  kasmvnc   - Build KasmVNC variant only"
-    echo "  selkies   - Build Selkies variant only"
-    echo "  prepare   - Prepare build contexts only"
+    echo "  build     - Build the image (default)"
+    echo "  prepare   - Prepare build context only"
     echo "  help      - Show this help"
     echo ""
     echo "Environment variables:"
@@ -45,7 +43,7 @@ show_help() {
 prepare_contexts() {
     log_info "Preparing build contexts..."
 
-    # Copy base scripts to variant directories
+    # Copy base scripts to build context
     cp docker/base/scripts/env-setup.sh docker/kasmvnc/scripts/
     cp docker/base/scripts/init-user.sh docker/kasmvnc/scripts/
     cp docker/base/scripts/plugin-manager.sh docker/kasmvnc/scripts/
@@ -53,57 +51,29 @@ prepare_contexts() {
     rm -rf docker/kasmvnc/plugins/
     cp -r plugins/ docker/kasmvnc/plugins/
 
-    cp docker/base/scripts/env-setup.sh docker/selkies/scripts/
-    cp docker/base/scripts/init-user.sh docker/selkies/scripts/
-    cp docker/base/scripts/plugin-manager.sh docker/selkies/scripts/
-    cp docker/base/scripts/setup-user.sh docker/selkies/scripts/
-    rm -rf docker/selkies/plugins/
-    cp -r plugins/ docker/selkies/plugins/
-
     log_success "Build contexts prepared"
 }
 
-build_kasmvnc() {
-    log_info "Building KasmVNC image..."
+build_image() {
+    log_info "Building image..."
 
     docker build \
         --build-arg USERNAME="${USERNAME}" \
-        -t "debian-desktop:kasmvnc-${IMAGE_TAG}" \
+        -t "desktop:${IMAGE_TAG}" \
         -f docker/kasmvnc/Dockerfile \
         docker/kasmvnc/
 
-    log_success "KasmVNC image built: debian-desktop:kasmvnc-${IMAGE_TAG}"
-}
-
-build_selkies() {
-    log_info "Building Selkies image..."
-
-    docker build \
-        --build-arg USERNAME="${USERNAME}" \
-        -t "debian-desktop:selkies-${IMAGE_TAG}" \
-        -f docker/selkies/Dockerfile \
-        docker/selkies/
-
-    log_success "Selkies image built: debian-desktop:selkies-${IMAGE_TAG}"
+    log_success "Image built: desktop:${IMAGE_TAG}"
 }
 
 # Change to script directory
 cd "$(dirname "$0")"
 
 # Parse command
-case "${1:-all}" in
-    all)
+case "${1:-build}" in
+    build|all)
         prepare_contexts
-        build_kasmvnc
-        build_selkies
-        ;;
-    kasmvnc)
-        prepare_contexts
-        build_kasmvnc
-        ;;
-    selkies)
-        prepare_contexts
-        build_selkies
+        build_image
         ;;
     prepare)
         prepare_contexts

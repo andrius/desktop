@@ -1,13 +1,12 @@
 # Makefile for Debian Docker Desktop
-.PHONY: all build build-kasmvnc build-selkies clean prepare help test-plugins
+.PHONY: all build clean prepare help run stop logs shell test-plugins
 
 # Default configuration
 USERNAME ?= user
 IMAGE_TAG ?= latest
 
-# Image names
-KASMVNC_IMAGE = debian-desktop:kasmvnc-$(IMAGE_TAG)
-SELKIES_IMAGE = debian-desktop:selkies-$(IMAGE_TAG)
+# Image name
+IMAGE_NAME = desktop:$(IMAGE_TAG)
 
 all: build
 
@@ -17,14 +16,13 @@ help:
 	@echo "Usage: make [target]"
 	@echo ""
 	@echo "Targets:"
-	@echo "  build          - Build all images"
-	@echo "  build-kasmvnc  - Build KasmVNC variant"
-	@echo "  build-selkies  - Build Selkies variant"
-	@echo "  run-kasmvnc    - Run KasmVNC container"
-	@echo "  run-selkies    - Run Selkies container"
-	@echo "  stop           - Stop all containers"
+	@echo "  build          - Build the image"
+	@echo "  run            - Run the container"
+	@echo "  stop           - Stop the container"
+	@echo "  logs           - Follow container logs"
+	@echo "  shell          - Shell into running container"
 	@echo "  clean          - Remove built images"
-	@echo "  prepare        - Prepare build contexts"
+	@echo "  prepare        - Prepare build context"
 	@echo "  help           - Show this help"
 	@echo ""
 	@echo "Variables:"
@@ -40,67 +38,37 @@ prepare:
 	@cp docker/base/scripts/setup-user.sh docker/kasmvnc/scripts/
 	@rm -rf docker/kasmvnc/plugins/
 	@cp -r plugins/ docker/kasmvnc/plugins/
-	@cp docker/base/scripts/env-setup.sh docker/selkies/scripts/
-	@cp docker/base/scripts/init-user.sh docker/selkies/scripts/
-	@cp docker/base/scripts/plugin-manager.sh docker/selkies/scripts/
-	@cp docker/base/scripts/setup-user.sh docker/selkies/scripts/
-	@rm -rf docker/selkies/plugins/
-	@cp -r plugins/ docker/selkies/plugins/
 	@echo "Build contexts prepared."
 
-build: build-kasmvnc build-selkies
-
-build-kasmvnc: prepare
-	@echo "Building KasmVNC image..."
+build: prepare
+	@echo "Building image..."
 	docker build \
 		--build-arg USERNAME=$(USERNAME) \
-		-t $(KASMVNC_IMAGE) \
+		-t $(IMAGE_NAME) \
 		-f docker/kasmvnc/Dockerfile \
 		docker/kasmvnc/
-	@echo "KasmVNC image built: $(KASMVNC_IMAGE)"
+	@echo "Image built: $(IMAGE_NAME)"
 
-build-selkies: prepare
-	@echo "Building Selkies image..."
-	docker build \
-		--build-arg USERNAME=$(USERNAME) \
-		-t $(SELKIES_IMAGE) \
-		-f docker/selkies/Dockerfile \
-		docker/selkies/
-	@echo "Selkies image built: $(SELKIES_IMAGE)"
-
-run-kasmvnc:
-	@echo "Starting KasmVNC container..."
-	docker compose -f docker-compose.kasmvnc.yml up -d
-	@echo "KasmVNC desktop available at http://localhost:6901"
-
-run-selkies:
-	@echo "Starting Selkies container..."
-	docker compose -f docker-compose.selkies.yml up -d
-	@echo "Selkies desktop available at http://localhost:8080"
+run:
+	@echo "Starting container..."
+	docker compose up -d
+	@echo "Desktop available at http://localhost:6901"
 
 stop:
 	@echo "Stopping containers..."
-	-docker compose -f docker-compose.kasmvnc.yml down
-	-docker compose -f docker-compose.selkies.yml down
+	-docker compose down
 	@echo "Containers stopped."
 
 clean: stop
 	@echo "Removing images..."
-	-docker rmi $(KASMVNC_IMAGE)
-	-docker rmi $(SELKIES_IMAGE)
+	-docker rmi $(IMAGE_NAME)
 	@echo "Cleanup complete."
 
-logs-kasmvnc:
-	docker compose -f docker-compose.kasmvnc.yml logs -f
+logs:
+	docker compose logs -f
 
-logs-selkies:
-	docker compose -f docker-compose.selkies.yml logs -f
-
-shell-kasmvnc:
-	docker compose -f docker-compose.kasmvnc.yml exec desktop bash
-
-shell-selkies:
-	docker compose -f docker-compose.selkies.yml exec desktop bash
+shell:
+	docker compose exec desktop bash
 
 test-plugins:
 	@chmod +x scripts/test-plugins.sh

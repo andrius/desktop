@@ -1,23 +1,19 @@
 # Debian Docker Desktop
 
-A fully-featured Debian 13 (Trixie) desktop environment running in Docker with web-based remote access. Choose between **KasmVNC** or **Selkies WebRTC** for remote desktop access.
+A fully-featured Debian 13 (Trixie) desktop environment running in Docker with web-based remote access via **KasmVNC**.
 
 ## Features
 
-- **Debian 13 Trixie** base with lightweight init (tini/dumb-init, no systemd)
+- **Debian 13 Trixie** base with lightweight init (tini, no systemd)
 - **XFCE4** desktop environment
+- **KasmVNC**: Web-based VNC with file transfer, audio, and clipboard support
 - **Homebrew** package manager
 - **Firefox ESR** pre-installed
-- **Two VNC variants**:
-  - **KasmVNC**: Web-based VNC with file transfer, audio, and clipboard support
-  - **Selkies**: WebRTC-based streaming with lower latency
 - **Plugin system** for optional software installation
 - **Configurable** via environment variables
 - **Passwordless sudo** for the desktop user
 
 ## Quick Start
-
-### Using KasmVNC (Recommended)
 
 ```bash
 # Clone the repository
@@ -28,18 +24,9 @@ cd debian-docker-desktop
 cp .env.example .env
 
 # Start the container
-docker compose -f docker-compose.kasmvnc.yml up -d
+docker compose up -d
 
 # Access the desktop at http://localhost:6901
-```
-
-### Using Selkies WebRTC
-
-```bash
-# Start the Selkies variant
-docker compose -f docker-compose.selkies.yml up -d
-
-# Access the desktop at http://localhost:8080
 ```
 
 ## Configuration
@@ -57,9 +44,8 @@ cp .env.example .env
 | `USERNAME` | `user` | Desktop username |
 | `RESOLUTION` | `1920x1080x24` | Screen resolution |
 | `TZ` | `UTC` | Timezone |
-| `VNC_PW` | `vncpassword` | VNC password (KasmVNC) |
+| `VNC_PW` | `vncpassword` | VNC password |
 | `VNC_WEB_PORT` | `6901` | KasmVNC web port |
-| `SELKIES_WEB_PORT` | `8080` | Selkies web port |
 
 ### Plugin Configuration
 
@@ -107,44 +93,26 @@ Each plugin is a self-contained directory with `init.sh`, `tests.sh`, and `READM
 ./scripts/test-plugins.sh --all --verbose
 ```
 
-## Image Variants
-
-### KasmVNC
-
-- **Best for**: General use, file transfer needs, enterprise deployments
-- **Port**: 6901 (web), 5901 (VNC)
-- **Features**: File upload/download, clipboard sync, audio streaming
-- **Access**: `http://localhost:6901`
-
-### Selkies WebRTC
-
-- **Best for**: Low-latency requirements, real-time applications
-- **Port**: 8080
-- **Features**: WebRTC streaming, hardware acceleration support
-- **Access**: `http://localhost:8080`
-- **Note**: May require TURN server for NAT traversal
-
 ## Port Forwarding
 
 | Service | Port | Protocol | Notes |
 |---------|------|----------|-------|
 | KasmVNC Web | 6901 | HTTP/WebSocket | Built-in, always available |
-| Selkies Web | 8080 | WebRTC | Built-in, may need TURN server |
 | XRDP | 3389 | RDP/TCP | Requires `xrdp` plugin |
 | NoMachine | 4000 | NX/TCP+UDP | Requires `nomachine` plugin |
 
-XRDP and NoMachine ports are pre-configured in all compose files. Enable the corresponding plugin to activate the service.
+XRDP and NoMachine ports are pre-configured in the compose file. Enable the corresponding plugin to activate the service.
 
 ## Building Images
 
 ### Build Locally
 
 ```bash
-# Build KasmVNC variant
-docker compose -f docker-compose.kasmvnc.yml build
+# Build the image
+make build
 
-# Build Selkies variant
-docker compose -f docker-compose.selkies.yml build
+# Or using docker compose
+docker compose build
 ```
 
 ### Using GitHub Actions
@@ -161,7 +129,7 @@ The repository includes GitHub Actions workflows that automatically build and pu
 
 ```bash
 # Enter the container
-docker exec -it debian-desktop-kasmvnc bash
+docker compose exec desktop bash
 
 # Run system update
 /opt/desktop/scripts/maintenance/update-system.sh
@@ -188,11 +156,7 @@ docker exec -it debian-desktop-kasmvnc bash
 ├── docker/
 │   ├── base/           # Shared base scripts (canonical source)
 │   │   └── scripts/    # env-setup.sh, init-user.sh, plugin-manager.sh
-│   ├── kasmvnc/        # KasmVNC variant
-│   │   ├── Dockerfile
-│   │   ├── scripts/
-│   │   └── configs/
-│   └── selkies/        # Selkies variant
+│   └── kasmvnc/        # KasmVNC build context
 │       ├── Dockerfile
 │       ├── scripts/
 │       └── configs/
@@ -211,10 +175,8 @@ docker exec -it debian-desktop-kasmvnc bash
 ├── docs/                    # Documentation
 ├── .github/
 │   └── workflows/           # GitHub Actions workflows
-├── docker-compose.yml              # Combined compose (profiles)
-├── docker-compose.kasmvnc.yml     # KasmVNC-specific compose
-├── docker-compose.selkies.yml     # Selkies-specific compose
-├── .env.example                    # Environment template
+├── docker-compose.yml       # Docker Compose file
+├── .env.example             # Environment template
 └── README.md
 ```
 
@@ -234,14 +196,13 @@ docker exec -it debian-desktop-kasmvnc bash
 ### Cannot connect to VNC
 
 1. Check if the container is running: `docker ps`
-2. Check container logs: `docker logs debian-desktop-kasmvnc`
+2. Check container logs: `docker compose logs`
 3. Verify ports are not in use: `netstat -tlnp | grep 6901`
 
 ### Slow performance
 
 1. Increase shared memory: Add `--shm-size=2g` or use the compose file
 2. Lower resolution in `.env`
-3. For Selkies, try a different encoder (x264enc, vp8enc)
 
 ### Plugins not installing
 
@@ -251,8 +212,8 @@ docker exec -it debian-desktop-kasmvnc bash
 
 ### Display issues
 
-1. Check X server: `docker exec debian-desktop-kasmvnc pgrep Xvfb`
-2. Verify display variable: `docker exec debian-desktop-kasmvnc echo $DISPLAY`
+1. Check X server: `docker compose exec desktop pgrep Xvfb`
+2. Verify display variable: `docker compose exec desktop echo $DISPLAY`
 3. Restart the container
 
 ## Security Considerations
@@ -274,6 +235,5 @@ Contributions are welcome! Please read the contributing guidelines and submit pu
 ## Acknowledgments
 
 - [KasmVNC](https://github.com/kasmtech/KasmVNC) - Kasm Technologies
-- [Selkies GStreamer](https://github.com/selkies-project/selkies-gstreamer) - Selkies Project
 - [Homebrew](https://brew.sh/) - Homebrew contributors
 - [XFCE](https://xfce.org/) - XFCE Development Team
