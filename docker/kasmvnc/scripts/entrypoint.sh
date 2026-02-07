@@ -38,9 +38,21 @@ fi
 
 # Start system services installed by plugins
 [ -x /etc/init.d/xrdp ] && /etc/init.d/xrdp start 2>/dev/null || true
-[ -x /etc/NX/nxserver ] && /etc/NX/nxserver --startup 2>/dev/null || true
 if command -v dockerd &>/dev/null && [ ! -S /var/run/docker.sock ]; then
     dockerd &>/dev/null &
+fi
+
+# NoMachine must start AFTER KasmVNC (needs the X display running)
+# Launch a background helper that waits for the display, then starts NoMachine
+if [ -x /etc/NX/nxserver ]; then
+    (
+        # Wait for KasmVNC to create the display
+        for i in $(seq 1 30); do
+            [ -e "/tmp/.X11-unix/X${DISPLAY#:}" ] && break
+            sleep 1
+        done
+        /etc/NX/nxserver --startup 2>/dev/null || true
+    ) &
 fi
 
 # Fix ownership after plugin installs may have modified home
