@@ -1,0 +1,25 @@
+# Developer desktop — VS Code, Homebrew, Docker (socket mount)
+# Usage: docker compose up -d
+# Access: http://localhost:6901
+
+services:
+  desktop:
+    image: ghcr.io/andrius/desktop:latest
+    hostname: dev-desktop
+    restart: unless-stopped
+    security_opt:
+      - seccomp:unconfined
+    shm_size: 2gb
+    ports:
+      - "6901:6901"
+    environment:
+      - VNC_PW=changeme
+      - RESOLUTION=1920x1080x24
+      - TZ=UTC
+      - PLUGINS=brew,vscode,docker
+    volumes:
+      - desktop-home:/home/user
+      - /var/run/docker.sock:/var/run/docker.sock  # grants full host Docker access
+
+volumes:
+  desktop-home:
