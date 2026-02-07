@@ -5,7 +5,7 @@
 # Default values
 export USERNAME="${USERNAME:-user}"
 export USER="${USERNAME}"
-export HOME="${HOME:-/home/${USERNAME}}"
+export HOME="/home/${USERNAME}"
 export DISPLAY="${DISPLAY:-:1}"
 export RESOLUTION="${RESOLUTION:-1920x1080x24}"
 export TZ="${TZ:-UTC}"
@@ -13,8 +13,8 @@ export LANG="${LANG:-en_US.UTF-8}"
 export LANGUAGE="${LANGUAGE:-en_US:en}"
 export LC_ALL="${LC_ALL:-en_US.UTF-8}"
 
-# XDG directories
-export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/runtime-${USERNAME}}"
+# XDG directories (always derive from USERNAME, not Dockerfile defaults)
+export XDG_RUNTIME_DIR="/tmp/runtime-${USERNAME}"
 export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-${HOME}/.config}"
 export XDG_DATA_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}"
 export XDG_CACHE_HOME="${XDG_CACHE_HOME:-${HOME}/.cache}"
