@@ -56,6 +56,10 @@ on:
         default: 'amd64,arm64'
         type: string
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}/debian-desktop-selkies
@@ -130,18 +134,18 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set up QEMU
         if: matrix.arch == 'arm64' && matrix.runner != 'ubuntu-24.04-arm'
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Log in to GitHub Container Registry
         if: github.event_name != 'pull_request' || inputs.push_image == true
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -150,7 +154,7 @@ jobs:
       # Docker Hub login (commented out - uncomment when ready to publish)
       # - name: Log in to Docker Hub
       #   if: github.event_name != 'pull_request' || inputs.push_image == true
-      #   uses: docker/login-action@v3
+      #   uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
       #   with:
       #     registry: docker.io
       #     username: ${{ vars.DOCKER_USERNAME }}
@@ -158,7 +162,7 @@ jobs:
 
       - name: Extract metadata for Docker
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
@@ -180,7 +184,7 @@ jobs:
       - name: Build Selkies image (single platform)
         if: needs.prepare.outputs.is_multi_platform == 'false'
         id: build_single
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
         with:
           context: ./docker/selkies
           file: ./docker/selkies/Dockerfile
@@ -202,7 +206,7 @@ jobs:
       - name: Build and push by digest (multi-platform)
         if: needs.prepare.outputs.is_multi_platform == 'true'
         id: build_multi
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
         with:
           context: ./docker/selkies
           file: ./docker/selkies/Dockerfile
@@ -234,7 +238,7 @@ jobs:
 
       - name: Upload digest
         if: needs.prepare.outputs.is_multi_platform == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: digests-selkies-${{ matrix.arch }}
           path: /tmp/digests/*
@@ -249,13 +253,153 @@ jobs:
 
       - name: Generate SBOM
         if: github.event_name != 'pull_request' && needs.prepare.outputs.is_multi_platform == 'false'
-        uses: anchore/sbom-action@v0
+        uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0
         with:
           image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
 
-  merge:
+  test:
     needs: [prepare, build]
-    if: needs.prepare.outputs.is_multi_platform == 'true'
+    # Tests are optional due to known Selkies + Debian Trixie GStreamer compatibility issue
+    # See: https://github.com/selkies-project/selkies/issues
+    continue-on-error: true
+    if: inputs.skip_tests != true && needs.build.result == 'success'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.prepare.outputs.platforms_matrix) }}
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Copy base scripts and plugins
+        run: |
+          cp docker/base/scripts/env-setup.sh docker/selkies/scripts/
+          cp docker/base/scripts/init-user.sh docker/selkies/scripts/
+          cp docker/base/scripts/plugin-manager.sh docker/selkies/scripts/
+          cp docker/base/scripts/setup-user.sh docker/selkies/scripts/
+          rm -rf docker/selkies/plugins/
+          cp -r plugins/ docker/selkies/plugins/
+
+      - name: Build image for testing
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
+        with:
+          context: ./docker/selkies
+          file: ./docker/selkies/Dockerfile
+          load: true
+          tags: debian-desktop:selkies-latest
+          cache-from: type=gha,scope=selkies-${{ matrix.arch }}
+          build-args: |
+            USERNAME=user
+            USER_UID=1000
+            USER_GID=1000
+
+      - name: Run integration tests
+        id: test
+        continue-on-error: true
+        run: |
+          chmod +x scripts/test-image.sh
+          ./scripts/test-image.sh selkies --verbose
+
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: selkies-test-logs-${{ matrix.arch }}
+          path: |
+            /tmp/*.log
+          retention-days: 7
+
+      - name: Test Summary
+        if: always()
+        run: |
+          echo "### Selkies Integration Test Results (${{ matrix.arch }})" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.test.outcome }}" == "success" ]; then
+            echo "All tests passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "Tests failed (known issue)" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Note:** Selkies has a known compatibility issue with Debian Trixie's GStreamer 1.24+" >> $GITHUB_STEP_SUMMARY
+            echo '(error: "Fraction() takes no arguments"). The desktop environment builds and runs,' >> $GITHUB_STEP_SUMMARY
+            echo "but the Selkies WebRTC interface is not functional until upstream fixes this." >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Tests performed:**" >> $GITHUB_STEP_SUMMARY
+          echo "- Container startup" >> $GITHUB_STEP_SUMMARY
+          echo "- Web interface accessibility (port 8080)" >> $GITHUB_STEP_SUMMARY
+          echo "- Web content validation" >> $GITHUB_STEP_SUMMARY
+          echo "- Health check verification" >> $GITHUB_STEP_SUMMARY
+          echo "- Log analysis for errors" >> $GITHUB_STEP_SUMMARY
+
+  test-plugins:
+    needs: [prepare, build]
+    continue-on-error: true
+    if: inputs.skip_tests != true && needs.build.result == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        plugin: [brew, xrdp, nomachine, cursor, vscode, claude-code, chrome, docker]
+        arch: [amd64, arm64]
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+        exclude:
+          - plugin: chrome
+            arch: arm64
+          - plugin: cursor
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Copy base scripts and plugins
+        run: |
+          cp docker/base/scripts/env-setup.sh docker/selkies/scripts/
+          cp docker/base/scripts/init-user.sh docker/selkies/scripts/
+          cp docker/base/scripts/plugin-manager.sh docker/selkies/scripts/
+          cp docker/base/scripts/setup-user.sh docker/selkies/scripts/
+          rm -rf docker/selkies/plugins/
+          cp -r plugins/ docker/selkies/plugins/
+
+      - name: Build image for plugin testing
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
+        with:
+          context: ./docker/selkies
+          file: ./docker/selkies/Dockerfile
+          load: true
+          tags: debian-desktop:selkies-latest
+          cache-from: type=gha,scope=selkies-${{ matrix.arch }}
+          build-args: |
+            USERNAME=user
+            USER_UID=1000
+            USER_GID=1000
+
+      - name: Test plugin ${{ matrix.plugin }}
+        run: |
+          chmod +x scripts/test-plugins.sh
+          ./scripts/test-plugins.sh ${{ matrix.plugin }} --verbose
+
+      - name: Plugin Test Summary
+        if: always()
+        run: |
+          echo "### Plugin Test: ${{ matrix.plugin }} (${{ matrix.arch }})" >> $GITHUB_STEP_SUMMARY
+
+  merge:
+    needs: [prepare, build, test, test-plugins]
+    if: >-
+      needs.prepare.outputs.is_multi_platform == 'true' &&
+      (needs.test.result == 'success' || needs.test.result == 'skipped') &&
+      (needs.test-plugins.result == 'success' || needs.test-plugins.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -263,17 +407,17 @@ jobs:
 
     steps:
       - name: Download digests
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: /tmp/digests
           pattern: digests-selkies-*
           merge-multiple: true
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -281,7 +425,7 @@ jobs:
 
       # Docker Hub login (commented out - uncomment when ready to publish)
       # - name: Log in to Docker Hub
-      #   uses: docker/login-action@v3
+      #   uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
       #   with:
       #     registry: docker.io
       #     username: ${{ vars.DOCKER_USERNAME }}
@@ -289,7 +433,7 @@ jobs:
 
       - name: Extract metadata for Docker
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
@@ -325,77 +469,3 @@ jobs:
           echo '```' >> $GITHUB_STEP_SUMMARY
           docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }} >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "Manifest inspection skipped" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-
-  test:
-    needs: [prepare, build, merge]
-    # Tests are optional due to known Selkies + Debian Trixie GStreamer compatibility issue
-    # See: https://github.com/selkies-project/selkies/issues
-    continue-on-error: true
-    if: always() && inputs.skip_tests != true && (needs.build.result == 'success') && (needs.prepare.outputs.is_multi_platform == 'false' || needs.merge.result == 'success')
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Copy base scripts and plugins
-        run: |
-          cp docker/base/scripts/env-setup.sh docker/selkies/scripts/
-          cp docker/base/scripts/init-user.sh docker/selkies/scripts/
-          cp docker/base/scripts/plugin-manager.sh docker/selkies/scripts/
-          cp docker/base/scripts/setup-user.sh docker/selkies/scripts/
-          rm -rf docker/selkies/plugins/
-          cp -r plugins/ docker/selkies/plugins/
-
-      - name: Build image for testing
-        uses: docker/build-push-action@v5
-        with:
-          context: ./docker/selkies
-          file: ./docker/selkies/Dockerfile
-          load: true
-          tags: debian-desktop:selkies-latest
-          cache-from: type=gha,scope=selkies-amd64
-          build-args: |
-            USERNAME=user
-            USER_UID=1000
-            USER_GID=1000
-
-      - name: Run integration tests
-        id: test
-        continue-on-error: true
-        run: |
-          chmod +x scripts/test-image.sh
-          ./scripts/test-image.sh selkies --verbose
-
-      - name: Upload test logs on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: selkies-test-logs
-          path: |
-            /tmp/*.log
-          retention-days: 7
-
-      - name: Test Summary
-        if: always()
-        run: |
-          echo "### Selkies Integration Test Results" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ steps.test.outcome }}" == "success" ]; then
-            echo "All tests passed" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "Tests failed (known issue)" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**Note:** Selkies has a known compatibility issue with Debian Trixie's GStreamer 1.24+" >> $GITHUB_STEP_SUMMARY
-            echo '(error: "Fraction() takes no arguments"). The desktop environment builds and runs,' >> $GITHUB_STEP_SUMMARY
-            echo "but the Selkies WebRTC interface is not functional until upstream fixes this." >> $GITHUB_STEP_SUMMARY
-          fi
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Tests performed:**" >> $GITHUB_STEP_SUMMARY
-          echo "- Container startup" >> $GITHUB_STEP_SUMMARY
-          echo "- Web interface accessibility (port 8080)" >> $GITHUB_STEP_SUMMARY
-          echo "- Web content validation" >> $GITHUB_STEP_SUMMARY
-          echo "- Health check verification" >> $GITHUB_STEP_SUMMARY
-          echo "- Log analysis for errors" >> $GITHUB_STEP_SUMMARY

@@ -2,12 +2,6 @@
 name: Build All Images
 
 on:
-  push:
-    branches:
-      - main
-      - master
-    tags:
-      - 'v*'
   schedule:
     # Build weekly on Sunday at midnight UTC
     - cron: '0 0 * * 0'
@@ -28,6 +22,15 @@ on:
         required: false
         default: 'amd64,arm64'
         type: string
+
+permissions:
+  contents: read
+  packages: write
+  security-events: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   REGISTRY: ghcr.io
@@ -108,21 +111,22 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Copy base scripts and plugins
         run: |
           cp docker/base/scripts/env-setup.sh docker/${{ matrix.variant }}/scripts/
           cp docker/base/scripts/init-user.sh docker/${{ matrix.variant }}/scripts/
           cp docker/base/scripts/plugin-manager.sh docker/${{ matrix.variant }}/scripts/
+          cp docker/base/scripts/setup-user.sh docker/${{ matrix.variant }}/scripts/
           rm -rf docker/${{ matrix.variant }}/plugins/
           cp -r plugins/ docker/${{ matrix.variant }}/plugins/
 
       - name: Build image for scanning
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
         with:
           context: ./docker/${{ matrix.variant }}
           load: true
@@ -130,7 +134,7 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.variant }}-amd64
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
         with:
           image-ref: 'debian-desktop:${{ matrix.variant }}-latest'
           format: 'sarif'
@@ -138,7 +142,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
       - name: Upload Trivy scan results
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@b5ebac6f4c00c8ccddb7cdcd45fdb248329f808a # v3
         if: always()
         with:
           sarif_file: 'trivy-results.sarif'
