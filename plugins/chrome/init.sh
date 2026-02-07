@@ -1,11 +1,6 @@
 #!/bin/bash
 # Chrome plugin - installs Google Chrome
-set -e
-
-source /opt/desktop/scripts/env-setup.sh
-
-LOG_FILE="/var/log/plugin-manager.log"
-log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] [chrome] $1" | tee -a "$LOG_FILE"; }
+source /opt/desktop/scripts/plugin-lib.sh
 
 # Check if already installed
 if command -v google-chrome-stable &>/dev/null; then
@@ -55,7 +50,6 @@ Icon=google-chrome
 Terminal=false
 Categories=Network;WebBrowser;
 EOF
-chmod +x "${HOME}/Desktop/Chrome.desktop"
 chown "${USERNAME}:${USERNAME}" "${HOME}/Desktop/Chrome.desktop"
 
 log "Google Chrome installed successfully"

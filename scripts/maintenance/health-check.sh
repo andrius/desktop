@@ -84,7 +84,7 @@ echo ""
 
 # Check X server
 log_info "Display Server:"
-if pgrep -x "Xvfb" > /dev/null || pgrep -x "Xorg" > /dev/null; then
+if pgrep -x "Xkasmvnc" > /dev/null || pgrep -x "Xvfb" > /dev/null || pgrep -x "Xorg" > /dev/null; then
     check_pass "X server is running"
 else
     check_fail "X server is not running"

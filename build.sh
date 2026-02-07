@@ -42,15 +42,7 @@ show_help() {
 
 prepare_contexts() {
     log_info "Preparing build contexts..."
-
-    # Copy base scripts to build context
-    cp docker/base/scripts/env-setup.sh docker/kasmvnc/scripts/
-    cp docker/base/scripts/init-user.sh docker/kasmvnc/scripts/
-    cp docker/base/scripts/plugin-manager.sh docker/kasmvnc/scripts/
-    cp docker/base/scripts/setup-user.sh docker/kasmvnc/scripts/
-    rm -rf docker/kasmvnc/plugins/
-    cp -r plugins/ docker/kasmvnc/plugins/
-
+    make prepare
     log_success "Build contexts prepared"
 }
 

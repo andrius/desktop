@@ -31,8 +31,8 @@ fi
 export PLUGINS="${PLUGINS:-}"
 
 # VNC configuration
-export VNC_PORT="${VNC_PORT:-5900}"
-export VNC_WEB_PORT="${VNC_WEB_PORT:-6080}"
-export VNC_PASSWORD="${VNC_PASSWORD:-}"
+export VNC_PORT="${VNC_PORT:-5901}"
+export VNC_WEB_PORT="${VNC_WEB_PORT:-6901}"
+export VNC_PW="${VNC_PW:-}"
 
 echo "Environment configured for user: ${USERNAME}"

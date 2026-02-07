@@ -1,11 +1,6 @@
 #!/bin/bash
 # NoMachine plugin - installs NoMachine remote desktop server
-set -e
-
-source /opt/desktop/scripts/env-setup.sh
-
-LOG_FILE="/var/log/plugin-manager.log"
-log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] [nomachine] $1" | tee -a "$LOG_FILE"; }
+source /opt/desktop/scripts/plugin-lib.sh
 
 # Check if already installed
 if command -v nxserver &>/dev/null || [ -x /etc/NX/nxserver ]; then
@@ -73,10 +68,4 @@ sed -i 's/^#\?CreateDisplay .*/CreateDisplay 0/' "$SERVER_CFG"
 # Ensure XFCE4 as the default desktop
 sed -i 's|^#\?DefaultDesktopCommand .*|DefaultDesktopCommand "/usr/bin/startxfce4"|' "$NODE_CFG"
 
-# Start NoMachine with the corrected configuration
-log "Starting NoMachine server..."
-if /etc/NX/nxserver --startup 2>&1 | tee -a "$LOG_FILE"; then
-    log "NoMachine installed successfully (port 4000, physical desktop on display :1)"
-else
-    log "WARNING: NoMachine startup returned non-zero, check /usr/NX/var/log/server.log"
-fi
+log "NoMachine installed successfully (port 4000, physical desktop on display :1)"

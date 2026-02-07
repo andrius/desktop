@@ -1,11 +1,6 @@
 #!/bin/bash
 # Cursor plugin - installs Cursor AI code editor via .deb package
-set -e
-
-source /opt/desktop/scripts/env-setup.sh
-
-LOG_FILE="/var/log/plugin-manager.log"
-log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] [cursor] $1" | tee -a "$LOG_FILE"; }
+source /opt/desktop/scripts/plugin-lib.sh
 
 # Check if already installed
 if [ -f "/usr/bin/cursor" ]; then
@@ -60,7 +55,6 @@ Categories=Development;IDE;
 StartupNotify=false
 StartupWMClass=Cursor
 DESKTOP
-chmod +x "${HOME}/Desktop/Cursor.desktop"
 chown "${USERNAME}:${USERNAME}" "${HOME}/Desktop/Cursor.desktop"
 
 # Also patch the system .desktop entry for application menu

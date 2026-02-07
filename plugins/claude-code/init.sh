@@ -1,11 +1,6 @@
 #!/bin/bash
 # Claude Code plugin - installs the Claude Code CLI
-set -e
-
-source /opt/desktop/scripts/env-setup.sh
-
-LOG_FILE="/var/log/plugin-manager.log"
-log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] [claude-code] $1" | tee -a "$LOG_FILE"; }
+source /opt/desktop/scripts/plugin-lib.sh
 
 # Check if already installed
 if command -v claude &>/dev/null; then

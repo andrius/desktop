@@ -171,14 +171,8 @@ jobs:
             type=sha,prefix=
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Copy base scripts and plugins to build context
-        run: |
-          cp docker/base/scripts/env-setup.sh docker/kasmvnc/scripts/
-          cp docker/base/scripts/init-user.sh docker/kasmvnc/scripts/
-          cp docker/base/scripts/plugin-manager.sh docker/kasmvnc/scripts/
-          cp docker/base/scripts/setup-user.sh docker/kasmvnc/scripts/
-          rm -rf docker/kasmvnc/plugins/
-          cp -r plugins/ docker/kasmvnc/plugins/
+      - name: Prepare build context
+        run: make prepare
 
       # Single platform build (load locally)
       - name: Build image (single platform)
@@ -272,14 +266,8 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
-      - name: Copy base scripts and plugins
-        run: |
-          cp docker/base/scripts/env-setup.sh docker/kasmvnc/scripts/
-          cp docker/base/scripts/init-user.sh docker/kasmvnc/scripts/
-          cp docker/base/scripts/plugin-manager.sh docker/kasmvnc/scripts/
-          cp docker/base/scripts/setup-user.sh docker/kasmvnc/scripts/
-          rm -rf docker/kasmvnc/plugins/
-          cp -r plugins/ docker/kasmvnc/plugins/
+      - name: Prepare build context
+        run: make prepare
 
       - name: Build image for testing
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
@@ -351,14 +339,8 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
-      - name: Copy base scripts and plugins
-        run: |
-          cp docker/base/scripts/env-setup.sh docker/kasmvnc/scripts/
-          cp docker/base/scripts/init-user.sh docker/kasmvnc/scripts/
-          cp docker/base/scripts/plugin-manager.sh docker/kasmvnc/scripts/
-          cp docker/base/scripts/setup-user.sh docker/kasmvnc/scripts/
-          rm -rf docker/kasmvnc/plugins/
-          cp -r plugins/ docker/kasmvnc/plugins/
+      - name: Prepare build context
+        run: make prepare
 
       - name: Build image for plugin testing
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5

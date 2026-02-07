@@ -215,7 +215,6 @@ Icon=firefox-esr
 Terminal=false
 Categories=Network;WebBrowser;
 EOF
-chmod +x "${HOME}/Desktop/Firefox.desktop"
 
 cat > "${HOME}/Desktop/Terminal.desktop" << 'EOF'
 [Desktop Entry]
@@ -228,7 +227,6 @@ Icon=utilities-terminal
 Terminal=false
 Categories=System;TerminalEmulator;
 EOF
-chmod +x "${HOME}/Desktop/Terminal.desktop"
 
 cat > "${HOME}/Desktop/File Manager.desktop" << EOF
 [Desktop Entry]
@@ -241,7 +239,6 @@ Icon=system-file-manager
 Terminal=false
 Categories=System;FileManager;
 EOF
-chmod +x "${HOME}/Desktop/File Manager.desktop"
 
 # Create autostart entry to set up desktop on session start
 # This runs after D-Bus session is available, enabling:

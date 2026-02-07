@@ -468,8 +468,10 @@ run_tests() {
     fi
 
     if [[ $failed -eq 0 ]]; then
-        # Test 7: Process ownership (default user)
-        if ! test_process_ownership "user"; then
+        # Test 7: Process ownership (detect expected user from container)
+        local expected_user
+        expected_user=$(docker compose -f "$COMPOSE_FILE" exec -T desktop printenv USERNAME 2>/dev/null || echo "user")
+        if ! test_process_ownership "$expected_user"; then
             failed=1
         fi
     fi

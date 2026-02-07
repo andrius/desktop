@@ -35,6 +35,7 @@ prepare:
 	@cp docker/base/scripts/env-setup.sh docker/kasmvnc/scripts/
 	@cp docker/base/scripts/init-user.sh docker/kasmvnc/scripts/
 	@cp docker/base/scripts/plugin-manager.sh docker/kasmvnc/scripts/
+	@cp docker/base/scripts/plugin-lib.sh docker/kasmvnc/scripts/
 	@cp docker/base/scripts/setup-user.sh docker/kasmvnc/scripts/
 	@rm -rf docker/kasmvnc/plugins/
 	@cp -r plugins/ docker/kasmvnc/plugins/

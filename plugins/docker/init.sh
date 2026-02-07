@@ -1,11 +1,6 @@
 #!/bin/bash
 # Docker plugin - installs Docker Engine (system service, DinD support)
-set -e
-
-source /opt/desktop/scripts/env-setup.sh
-
-LOG_FILE="/var/log/plugin-manager.log"
-log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] [docker] $1" | tee -a "$LOG_FILE"; }
+source /opt/desktop/scripts/plugin-lib.sh
 
 # Check if already installed
 if command -v docker &>/dev/null; then
@@ -31,12 +26,5 @@ rm -rf /var/lib/apt/lists/*
 
 # Add user to docker group
 usermod -aG docker "${USERNAME}" 2>/dev/null || true
-
-# Start dockerd if no socket is already mounted
-if [ ! -S /var/run/docker.sock ]; then
-    log "Starting Docker daemon..."
-    dockerd &>/dev/null &
-    sleep 2
-fi
 
 log "Docker Engine installed successfully"

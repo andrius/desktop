@@ -1,11 +1,6 @@
 #!/bin/bash
 # Homebrew plugin - installs Homebrew package manager
-set -e
-
-source /opt/desktop/scripts/env-setup.sh
-
-LOG_FILE="/var/log/plugin-manager.log"
-log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] [brew] $1" | tee -a "$LOG_FILE"; }
+source /opt/desktop/scripts/plugin-lib.sh
 
 BREW_PREFIX="/home/linuxbrew/.linuxbrew"
 

@@ -173,8 +173,20 @@ test_plugin() {
         done
     fi
 
-    # Give the plugin some time to finish installing
-    sleep 10
+    # Wait for plugin installation to complete (marker file)
+    local install_elapsed=0
+    while [[ $install_elapsed -lt 120 ]]; do
+        if docker exec "$cid" test -f "/opt/desktop/plugins/.installed/${plugin}" 2>/dev/null; then
+            log_verbose "Plugin ${plugin} installation marker found"
+            break
+        fi
+        sleep 5
+        install_elapsed=$((install_elapsed + 5))
+    done
+
+    if [[ $install_elapsed -ge 120 ]]; then
+        log_warn "Plugin ${plugin} install marker not found after 120s, running tests anyway"
+    fi
 
     # Run plugin tests
     log_verbose "Running tests for ${plugin}..."

@@ -151,6 +151,25 @@ test_plugin() {
     bash -e "$test_script"
 }
 
+# Start services for installed plugins
+start_plugins() {
+    if [ ! -d "$MARKER_DIR" ]; then
+        return 0
+    fi
+
+    for marker in "$MARKER_DIR"/*; do
+        [ -f "$marker" ] || continue
+        local name
+        name=$(basename "$marker")
+        local startup_script="${PLUGIN_BASE_DIR}/${name}/startup.sh"
+        if [ -f "$startup_script" ]; then
+            log "Starting service: ${name}"
+            bash "$startup_script" 2>&1 | tee -a "$LOG_FILE" || \
+                log "WARNING: Service '${name}' startup failed"
+        fi
+    done
+}
+
 # Update plugins from remote repository via sparse-checkout
 update_plugins() {
     log "Updating plugins from ${REPO_URL}..."
@@ -178,6 +197,9 @@ case "${1:-install}" in
     install)
         install_plugins
         ;;
+    start)
+        start_plugins
+        ;;
     list)
         list_plugins
         ;;
@@ -196,7 +218,7 @@ case "${1:-install}" in
         if [ -f "${PLUGIN_BASE_DIR}/$1/init.sh" ]; then
             install_plugin "$1"
         else
-            echo "Usage: $0 {install|list|test <name>|update|<plugin-name>}"
+            echo "Usage: $0 {install|start|list|test <name>|update|<plugin-name>}"
             exit 1
         fi
         ;;
