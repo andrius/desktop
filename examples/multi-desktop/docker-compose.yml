@@ -1,0 +1,42 @@
+# Multiple isolated desktops on different ports
+# Usage: docker compose up -d
+# Access:
+#   Desktop 1: http://localhost:6901
+#   Desktop 2: http://localhost:6902
+
+services:
+  desktop-1:
+    image: ghcr.io/andrius/desktop:latest
+    hostname: desktop-1
+    restart: unless-stopped
+    security_opt:
+      - seccomp:unconfined
+    shm_size: 2gb
+    ports:
+      - "6901:6901"
+    environment:
+      - VNC_PW=changeme
+      - RESOLUTION=1920x1080x24
+      - PLUGINS=brew,vscode
+    volumes:
+      - home-1:/home/user
+
+  desktop-2:
+    image: ghcr.io/andrius/desktop:latest
+    hostname: desktop-2
+    restart: unless-stopped
+    security_opt:
+      - seccomp:unconfined
+    shm_size: 2gb
+    ports:
+      - "6902:6901"
+    environment:
+      - VNC_PW=changeme
+      - RESOLUTION=1920x1080x24
+      - PLUGINS=brew,cursor
+    volumes:
+      - home-2:/home/user
+
+volumes:
+  home-1:
+  home-2:

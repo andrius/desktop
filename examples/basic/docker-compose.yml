@@ -1,0 +1,23 @@
+# Basic desktop — no plugins, just XFCE + KasmVNC
+# Usage: docker compose up -d
+# Access: http://localhost:6901
+
+services:
+  desktop:
+    image: ghcr.io/andrius/desktop:latest
+    hostname: desktop
+    restart: unless-stopped
+    security_opt:
+      - seccomp:unconfined
+    shm_size: 2gb
+    ports:
+      - "6901:6901"
+    environment:
+      - VNC_PW=changeme
+      - RESOLUTION=1920x1080x24
+      - TZ=UTC
+    volumes:
+      - desktop-home:/home/user
+
+volumes:
+  desktop-home:

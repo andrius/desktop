@@ -1,0 +1,20 @@
+# Example Caddyfile snippet for proxying to KasmVNC
+#
+# KasmVNC runs with self-signed SSL on docker0, so Caddy must:
+#   1. Use HTTPS transport to the backend
+#   2. Skip certificate verification (self-signed)
+
+desktop.example.com {
+  # Replace with output of ./get-docker-ip.sh (typically 172.17.0.1)
+  reverse_proxy 172.17.0.1:6901 {
+    transport http {
+      tls
+      tls_insecure_skip_verify
+    }
+  }
+
+  tls {
+    # Use your preferred TLS method, e.g.:
+    # dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+  }
+}

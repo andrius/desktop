@@ -1,0 +1,32 @@
+# KasmVNC behind HTTPS reverse proxy (Caddy, nginx, etc.)
+#
+# KasmVNC with SSL binds only to docker0 — not exposed publicly.
+# The reverse proxy terminates public HTTPS and forwards to KasmVNC.
+#
+# Setup:
+#   DOCKER_IP=$(./get-docker-ip.sh) docker compose up -d
+#
+# Access via your reverse proxy, e.g.: https://desktop.example.com
+
+services:
+  desktop:
+    image: ghcr.io/andrius/desktop:latest
+    hostname: desktop
+    restart: unless-stopped
+    security_opt:
+      - seccomp:unconfined
+    shm_size: 2gb
+    ports:
+      # Bind to docker0 only — reachable from host/proxy, not from outside
+      - "${DOCKER_IP:?Set DOCKER_IP first, see get-docker-ip.sh}:6901:6901"
+    environment:
+      - VNC_PW=${VNC_PW:-changeme}
+      - KASMVNC_ENABLE_SSL=true
+      - RESOLUTION=1920x1080x24
+      - TZ=UTC
+      - PLUGINS=${PLUGINS:-}
+    volumes:
+      - desktop-home:/home/user
+
+volumes:
+  desktop-home:
