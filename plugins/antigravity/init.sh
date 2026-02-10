@@ -23,7 +23,8 @@ install -D -o root -g root -m 644 /tmp/google-antigravity.gpg /usr/share/keyring
 echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-antigravity.gpg] https://us-central1-apt.pkg.dev/projects/antigravity-auto-updater-dev/ antigravity-debian main" > /etc/apt/sources.list.d/google-antigravity.list
 rm -f /tmp/google-antigravity.gpg
 
-apt-get update
+apt-get update -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/google-antigravity.list \
+    -o Dir::Etc::sourceparts="-" || apt-get update || true
 apt-get install -y antigravity
 rm -rf /var/lib/apt/lists/*
 

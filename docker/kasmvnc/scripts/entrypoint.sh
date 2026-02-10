@@ -48,6 +48,22 @@ if [ -n "${PLUGINS:-}" ]; then
 
         # Fix ownership after plugin installs
         chown -R "${USERNAME}:${USERNAME}" "/home/${USERNAME}"
+
+        # Mark plugin-created desktop shortcuts as trusted
+        if command -v gio >/dev/null 2>&1; then
+            gosu "${USERNAME}" bash -c '
+                for i in $(seq 1 15); do
+                    pgrep -u "$(whoami)" gvfsd-metadata >/dev/null 2>&1 && break
+                    sleep 1
+                done
+                for f in "$HOME/Desktop/"*.desktop; do
+                    [ -f "$f" ] || continue
+                    CHECKSUM=$(sha256sum "$f" | cut -d" " -f1)
+                    gio set "$f" metadata::xfce-exe-checksum "$CHECKSUM" 2>/dev/null || true
+                    gio set "$f" metadata::trusted true 2>/dev/null || true
+                done
+            '
+        fi
     ) &
 fi
 

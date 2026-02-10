@@ -73,13 +73,15 @@ install_plugin() {
     fi
 
     log "Installing plugin: ${name}"
-    if bash -e "$init_script" 2>&1 | tee -a "$LOG_FILE"; then
+    local rc=0
+    bash -e "$init_script" > >(tee -a "$LOG_FILE") 2>&1 || rc=$?
+    if [ $rc -eq 0 ]; then
         mkdir -p "$MARKER_DIR"
         touch "$marker"
         log "Plugin '${name}' installed successfully"
         return 0
     else
-        log "ERROR: Plugin '${name}' installation failed"
+        log "ERROR: Plugin '${name}' installation failed (exit code: ${rc})"
         return 1
     fi
 }
