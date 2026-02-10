@@ -45,7 +45,7 @@ This guide covers all configuration options for the Debian Docker Desktop.
 | `XRDP_PORT` | `3389` | Host port for XRDP (when xrdp plugin is enabled) |
 | `NOMACHINE_PORT` | `4000` | Host port for NoMachine (when nomachine plugin is enabled) |
 
-Available plugins: `brew`, `chrome`, `xrdp`, `nomachine`, `cursor`, `vscode`, `claude-code`, `docker`
+Available plugins: `brew`, `chrome`, `xrdp`, `nomachine`, `cursor`, `vscode`, `claude-code`, `docker`, `antigravity`, `opencode`
 
 ### Homebrew Configuration
 

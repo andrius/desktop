@@ -33,7 +33,7 @@ CLEANUP=true
 PLUGINS=()
 
 # All available plugins (excluding docker which needs privileged)
-ALL_PLUGINS=(brew chrome xrdp nomachine cursor vscode claude-code)
+ALL_PLUGINS=(brew chrome xrdp nomachine cursor vscode claude-code antigravity opencode)
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do

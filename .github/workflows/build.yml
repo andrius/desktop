@@ -320,7 +320,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        plugin: [brew, xrdp, nomachine, cursor, vscode, claude-code, chrome, docker]
+        plugin: [brew, xrdp, nomachine, cursor, vscode, claude-code, chrome, docker, antigravity, opencode]
         arch: [amd64, arm64]
         include:
           - arch: amd64
@@ -329,6 +329,8 @@ jobs:
             runner: ubuntu-24.04-arm
         exclude:
           - plugin: chrome
+            arch: arm64
+          - plugin: antigravity
             arch: arm64
     runs-on: ${{ matrix.runner }}
 

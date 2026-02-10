@@ -25,6 +25,8 @@ Plugins install automatically on first container start and are skipped on restar
 | `vscode` | Visual Studio Code | - | all |
 | `claude-code` | Claude Code CLI | - | all |
 | `docker` | Docker Engine (DinD) | - | all |
+| `antigravity` | Antigravity AI code editor | - | amd64 |
+| `opencode` | OpenCode AI coding agent | - | all |
 
 ## Plugin Configuration
 
@@ -99,6 +101,7 @@ Each plugin lives at `plugins/<name>/`:
 
 ```
 plugins/
+├── antigravity/
 ├── brew/
 │   ├── init.sh       # Installation script
 │   ├── tests.sh      # Automated tests
@@ -108,6 +111,7 @@ plugins/
 ├── cursor/
 ├── docker/
 ├── nomachine/
+├── opencode/
 ├── vscode/
 ├── xrdp/
 └── ...

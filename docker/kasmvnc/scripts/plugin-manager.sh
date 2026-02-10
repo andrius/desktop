@@ -30,6 +30,8 @@ compat_enable_vars() {
         [ENABLE_XRDP]="xrdp"
         [ENABLE_DOCKER]="docker"
         [ENABLE_BREW]="brew"
+        [ENABLE_ANTIGRAVITY]="antigravity"
+        [ENABLE_OPENCODE]="opencode"
     )
 
     for var in "${!legacy_map[@]}"; do

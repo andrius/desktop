@@ -68,6 +68,8 @@ PLUGINS=brew,vscode,cursor
 | `vscode` | Visual Studio Code |
 | `claude-code` | Claude Code CLI |
 | `docker` | Docker Engine (DinD) |
+| `antigravity` | Antigravity AI code editor (amd64 only) |
+| `opencode` | OpenCode AI coding agent |
 
 Each plugin is a self-contained directory with `init.sh`, `tests.sh`, and `README.md`. Plugins install on first boot and are skipped on restart.
 
@@ -170,12 +172,14 @@ docker compose exec desktop bash
 │       ├── scripts/
 │       └── configs/
 ├── plugins/            # Plugin system (each has init.sh, tests.sh, README.md)
+│   ├── antigravity/
 │   ├── brew/
 │   ├── chrome/
 │   ├── claude-code/
 │   ├── cursor/
 │   ├── docker/
 │   ├── nomachine/
+│   ├── opencode/
 │   ├── vscode/
 │   └── xrdp/
 ├── scripts/
