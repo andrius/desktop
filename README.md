@@ -2,6 +2,19 @@
 
 A fully-featured Debian 13 (Trixie) desktop environment running in Docker with web-based remote access via **KasmVNC**.
 
+## Why a Desktop in Docker?
+
+Modern AI coding tools — [Cursor](https://www.cursor.com/), [Claude Code](https://claude.ai/code), [Antigravity](https://antigravity.google/), [OpenCode](https://github.com/opencode-ai/opencode) — have moved beyond code completion into agentic workflows. Through [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) servers like [Playwright MCP](https://github.com/microsoft/playwright-mcp), these tools can launch browsers, interact with web pages via accessibility tree snapshots, run terminal commands, and automate entire development workflows — all without vision models, using structured DOM data instead.
+
+This creates a need for a **sandboxed desktop environment** where AI agents and developers can safely test, debug, and automate:
+
+- **Frontend development** — AI agents can open a real browser, navigate to `localhost`, interact with UI elements through accessibility snapshots, capture screenshots, and debug with DevTools — all inside an isolated container that won't interfere with your host system
+- **VoIP and WebRTC development** — test SIP clients, WebRTC peer connections, and media pipelines in a containerized environment with audio support (PulseAudio), network isolation, and real browser-based clients — no host audio stack conflicts
+- **AI agent workflows** — give coding agents like Cursor or Claude Code a full desktop with browser access for end-to-end testing, UI automation, and visual verification, sandboxed from your host machine
+- **Reproducible test environments** — spin up identical, disposable desktops for CI/CD pipelines, QA testing, or live demos, with deterministic plugin configurations via the `PLUGINS` environment variable
+
+This container provides that sandbox: a complete Debian desktop accessible via any browser, with a plugin system that installs the AI coding tools (Cursor, Claude Code, Antigravity, OpenCode) and development infrastructure (Docker-in-Docker, Homebrew, Chrome) needed for these workflows.
+
 ## Features
 
 - **Debian 13 Trixie** base with lightweight init (tini, no systemd)
