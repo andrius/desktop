@@ -53,6 +53,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     lsb-release \
     apt-transport-https \
     git \
+    openssh-client \
     procps \
     psmisc \
     net-tools \
@@ -129,6 +130,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Remove unnecessary autostart items
     && rm -f /etc/xdg/autostart/xfce4-power-manager.desktop 2>/dev/null || true \
     && rm -f /etc/xdg/autostart/xscreensaver.desktop 2>/dev/null || true
+
+# RUN: Install mise (runtime version manager)
+RUN install -dm 755 /etc/apt/keyrings && \
+    curl -fsSL https://mise.jdx.dev/gpg-key.pub > /etc/apt/keyrings/mise-archive-keyring.asc && \
+    echo "deb [signed-by=/etc/apt/keyrings/mise-archive-keyring.asc] https://mise.jdx.dev/deb stable main" > /etc/apt/sources.list.d/mise.list && \
+    apt-get update && \
+    apt-get install -y mise && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # RUN 2: Configure locale + Install KasmVNC + Create user + Setup directories
 # Re-declare TARGETARCH for this stage (provided by buildx)
