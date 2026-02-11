@@ -52,4 +52,17 @@ Categories=Network;WebBrowser;
 EOF
 chown "${USERNAME}:${USERNAME}" "${HOME}/Desktop/Chrome.desktop"
 
+# Wrap Chrome binaries so any direct invocation gets --no-sandbox
+# (apps like Cursor/VS Code call the binary directly, bypassing .desktop files)
+for chrome_bin in /usr/bin/google-chrome-stable /usr/bin/google-chrome; do
+    if [ -f "$chrome_bin" ] && [ ! -f "${chrome_bin}.real" ]; then
+        mv "$chrome_bin" "${chrome_bin}.real"
+        cat > "$chrome_bin" << WRAPPER
+#!/bin/bash
+exec "${chrome_bin}.real" --no-sandbox "\$@"
+WRAPPER
+        chmod +x "$chrome_bin"
+    fi
+done
+
 log "Google Chrome installed successfully"

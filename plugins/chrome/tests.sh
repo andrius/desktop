@@ -29,6 +29,19 @@ else
     ERRORS=$((ERRORS + 1))
 fi
 
+# Test: Chrome binary is wrapped with --no-sandbox
+if [ -f /usr/bin/google-chrome-stable.real ]; then
+    if grep -q '\-\-no-sandbox' /usr/bin/google-chrome-stable; then
+        echo "  PASS: google-chrome-stable is wrapped with --no-sandbox"
+    else
+        echo "  FAIL: google-chrome-stable wrapper missing --no-sandbox"
+        ERRORS=$((ERRORS + 1))
+    fi
+else
+    echo "  FAIL: google-chrome-stable.real not found (wrapper not applied)"
+    ERRORS=$((ERRORS + 1))
+fi
+
 if [ $ERRORS -gt 0 ]; then
     echo "FAILED: ${ERRORS} test(s) failed"
     exit 1

@@ -27,6 +27,9 @@ if [ -d "$HOMEBREW_PREFIX" ]; then
     export PATH="${HOMEBREW_PREFIX}/bin:${HOMEBREW_PREFIX}/sbin:${PATH}"
 fi
 
+# Default browser (universal launcher handles sandbox flags for Docker)
+export BROWSER="/opt/desktop/scripts/browser-launcher.sh"
+
 # Plugin configuration (comma-separated list, e.g. PLUGINS=brew,vscode,cursor)
 export PLUGINS="${PLUGINS:-}"
 

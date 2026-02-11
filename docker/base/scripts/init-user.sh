@@ -203,6 +203,77 @@ fi
 SCRIPT
 chmod +x /opt/desktop/scripts/firefox-launcher.sh
 
+# Create universal browser launcher (handles sandbox flags for Docker)
+# Detects Chrome or Firefox at runtime — Chrome is a plugin installed after init
+cat > /opt/desktop/scripts/browser-launcher.sh << 'LAUNCHER'
+#!/bin/bash
+if command -v google-chrome-stable >/dev/null 2>&1; then
+    exec google-chrome-stable "$@"
+elif command -v firefox-esr >/dev/null 2>&1; then
+    exec /opt/desktop/scripts/firefox-launcher.sh "$@"
+else
+    echo "No supported browser found" >&2
+    exit 1
+fi
+LAUNCHER
+chmod +x /opt/desktop/scripts/browser-launcher.sh
+
+# Register browser-launcher as system default browser
+
+# .desktop entry for xdg-open / mimeapps
+mkdir -p "${HOME}/.local/share/applications"
+cat > "${HOME}/.local/share/applications/browser-launcher.desktop" << 'EOF'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Default Browser
+Comment=Open URL in the default browser
+Exec=/opt/desktop/scripts/browser-launcher.sh %u
+Icon=web-browser
+Terminal=false
+Categories=Network;WebBrowser;
+MimeType=x-scheme-handler/http;x-scheme-handler/https;text/html;
+EOF
+
+# Default MIME handler for HTTP/HTTPS URLs
+mkdir -p "${HOME}/.config"
+cat > "${HOME}/.config/mimeapps.list" << 'EOF'
+[Default Applications]
+x-scheme-handler/http=browser-launcher.desktop
+x-scheme-handler/https=browser-launcher.desktop
+text/html=browser-launcher.desktop
+EOF
+
+# XFCE preferred applications helper
+mkdir -p "${HOME}/.local/share/xfce4/helpers"
+cat > "${HOME}/.local/share/xfce4/helpers/custom-WebBrowser.desktop" << 'EOF'
+[Desktop Entry]
+Version=1.0
+Type=X-XFCE-Helper
+Name=Default Browser
+Icon=web-browser
+X-XFCE-Binaries=browser-launcher.sh
+X-XFCE-Category=WebBrowser
+X-XFCE-Commands=/opt/desktop/scripts/browser-launcher.sh;
+X-XFCE-CommandsWithParameter=/opt/desktop/scripts/browser-launcher.sh "%s";
+EOF
+
+mkdir -p "${HOME}/.config/xfce4"
+cat > "${HOME}/.config/xfce4/helpers.rc" << 'EOF'
+WebBrowser=custom-WebBrowser
+EOF
+
+# Register as x-www-browser alternative (priority 300 beats Firefox 100, Chrome 200)
+update-alternatives --install /usr/bin/x-www-browser x-www-browser /opt/desktop/scripts/browser-launcher.sh 300
+
+# Ensure BROWSER env is available in interactive shells and XFCE session
+for rc_file in "${HOME}/.bashrc" "${HOME}/.profile"; do
+    touch "$rc_file"
+    if ! grep -q 'BROWSER=' "$rc_file" 2>/dev/null; then
+        echo 'export BROWSER="/opt/desktop/scripts/browser-launcher.sh"' >> "$rc_file"
+    fi
+done
+
 # Create desktop shortcuts
 cat > "${HOME}/Desktop/Firefox.desktop" << 'EOF'
 [Desktop Entry]
